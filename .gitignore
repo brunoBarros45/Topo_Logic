@@ -1,0 +1,59 @@
+# Local read-only reference repositories (root-anchored so skill references/ are tracked)
+/references/
+
+# Third-party local community skills (active locally, excluded from Topo_Logic Git repo)
+.agents/skills/hpc-gmsh/
+.agents/skills/hpc-calculix/
+.agents/skills/hpc-fenics/
+.agents/skills/hpc-paraview/
+.agents/skills/topo2stl/
+.agents/skills/threejs-fundamentals/
+.agents/skills/threejs-geometry/
+.agents/skills/threejs-loaders/
+.agents/skills/threejs-materials/
+.agents/skills/threejs-shaders/
+.agents/skills/threejs-interaction/
+.agents/skills/threejs-performance/
+.agents/skills/threejs-react-three-fiber/
+.agents/skills/freecad-scripts/
+.agents/skills/parametric-3d-printing/
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# Node / Frontend
+node_modules/
+.vite/
+*.local
+coverage/
+
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+
+# Heavy FEM / Mesh temporary artifacts
+*.vtu
+*.vtk
+*.msh
+*.frd
+*.cvg
+*.sta
+*.12d
+*.eig
+
+# OS & Editors
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
