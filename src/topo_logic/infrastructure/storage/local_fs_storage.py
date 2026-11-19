@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import tempfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from topo_logic.domain.exceptions import DomainValidationError, ResourceNotFoundError
 
@@ -54,7 +54,15 @@ class LocalFsArtifactStorage:
 
     def _resolve_safe(self, key: str) -> Path:
         raw = key.strip()
-        if not raw or raw.startswith(("/", "\\")) or Path(raw).is_absolute():
+        win_path = PureWindowsPath(raw)
+        if (
+            not raw
+            or raw.startswith(("/", "\\"))
+            or Path(raw).is_absolute()
+            or PurePosixPath(raw).is_absolute()
+            or win_path.is_absolute()
+            or bool(win_path.drive)
+        ):
             raise DomainValidationError(
                 "Artifact key must be a non-empty relative path.",
                 details={"artifact_key": key},
