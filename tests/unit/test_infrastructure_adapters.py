@@ -37,6 +37,12 @@ def test_local_fs_storage_atomic_write_and_path_traversal_guard(tmp_path: Path) 
     with pytest.raises(DomainValidationError):
         storage.save_bytes("C:\\escape.stl", b"bad")
 
+    with pytest.raises(DomainValidationError):
+        storage.save_bytes("C:relative.stl", b"bad")
+
+    with pytest.raises(DomainValidationError):
+        storage.save_bytes("\\\\server\\share\\escape.stl", b"bad")
+
 
 @pytest.mark.unit
 async def test_event_bus_and_local_job_queue_cooperative_cancellation() -> None:
