@@ -9,6 +9,11 @@ from topo_logic.infrastructure.mesh.gmsh_cli_mesher import (
     extract_tet_boundary_triangles,
     parse_msh2_text,
 )
+from topo_logic.infrastructure.mesh.multi_format_importer import (
+    CompositeGeometryImporter,
+    GmshStepImporter,
+    TrimeshSurfaceImporter,
+)
 from topo_logic.infrastructure.mesh.stl_importer import TrimeshStlImporter
 from topo_logic.infrastructure.mesh.trimesh_repairer import TrimeshSurfaceRepairer
 from topo_logic.infrastructure.mesh.volume_mesh import (
@@ -20,9 +25,12 @@ from topo_logic.infrastructure.mesh.volume_mesh import (
 from topo_logic.infrastructure.mesh.voxel_mesher import VoxelH8Mesher
 
 __all__ = [
+    "CompositeGeometryImporter",
     "CompositeVolumetricMesher",
     "GmshCliMesher",
+    "GmshStepImporter",
     "TrimeshStlImporter",
+    "TrimeshSurfaceImporter",
     "TrimeshSurfaceRepairer",
     "VolumeMeshData",
     "VoxelH8Mesher",

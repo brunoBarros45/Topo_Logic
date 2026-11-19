@@ -10,7 +10,11 @@ import uvicorn
 
 from topo_logic import __version__
 from topo_logic.infrastructure.config import AppSettings
-from topo_logic.infrastructure.mesh import TrimeshStlImporter
+from topo_logic.infrastructure.mesh import (
+    CompositeGeometryImporter,
+    GmshStepImporter,
+    TrimeshSurfaceImporter,
+)
 from topo_logic.interfaces.api.app import create_app
 
 
@@ -36,12 +40,12 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _cmd_info(settings: AppSettings) -> int:
-    importer = TrimeshStlImporter()
+    importer = CompositeGeometryImporter([TrimeshSurfaceImporter(), GmshStepImporter()])
     formats = ", ".join(fmt.value.upper() for fmt in sorted(importer.supported_formats()))
     print(f"Topo_Logic {__version__}")
     print("Execution Mode : local_first (SQLite + LocalFS + Local Workers)")
     print(f"Data Directory : {settings.data_dir}")
-    print(f"Formats (Ph.1) : {formats}")
+    print(f"Formats        : {formats}")
     print(f"Default Server : http://{settings.host}:{settings.port}")
     return 0
 
