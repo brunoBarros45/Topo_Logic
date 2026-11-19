@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "topo-logic"
-version = "0.3.0a0"
+version = "0.4.0a0"
 description = "Open-source 3D Finite Element Analysis (FEM) and 3D Topology Optimization engine and API."
 readme = "README.md"
 requires-python = ">=3.11"
