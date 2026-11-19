@@ -1,0 +1,140 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  color-scheme: light dark;
+
+  --cae-bg-light: #f4f6f9;
+  --cae-bg-dark: #0b0f14;
+  --cae-panel-light: #ffffff;
+  --cae-panel-dark: #121821;
+  --cae-elevated-light: #eef2f6;
+  --cae-elevated-dark: #19222e;
+  --cae-border-light: #d5dde7;
+  --cae-border-dark: #253142;
+  --cae-text-light: #0f172a;
+  --cae-text-dark: #e2e8f0;
+  --cae-muted-light: #475569;
+  --cae-muted-dark: #94a3b8;
+  --cae-accent-light: #0284c7;
+  --cae-accent-dark: #38bdf8;
+  --cae-scrollbar-thumb-light: #94a3b8;
+  --cae-scrollbar-thumb-dark: #475569;
+  --cae-scrollbar-track-light: #e2e8f0;
+  --cae-scrollbar-track-dark: #0f151d;
+
+  --bg-app: var(--cae-bg-light);
+  --bg-panel: var(--cae-panel-light);
+  --bg-elevated: var(--cae-elevated-light);
+  --border-subtle: var(--cae-border-light);
+  --text-primary: var(--cae-text-light);
+  --text-muted: var(--cae-muted-light);
+  --accent-primary: var(--cae-accent-light);
+  --scrollbar-thumb: var(--cae-scrollbar-thumb-light);
+  --scrollbar-track: var(--cae-scrollbar-track-light);
+}
+
+:root:has(> head > meta[name="color-scheme"][content="dark"]),
+html.dark {
+  color-scheme: dark;
+  --bg-app: var(--cae-bg-dark);
+  --bg-panel: var(--cae-panel-dark);
+  --bg-elevated: var(--cae-elevated-dark);
+  --border-subtle: var(--cae-border-dark);
+  --text-primary: var(--cae-text-dark);
+  --text-muted: var(--cae-muted-dark);
+  --accent-primary: var(--cae-accent-dark);
+  --scrollbar-thumb: var(--cae-scrollbar-thumb-dark);
+  --scrollbar-track: var(--cae-scrollbar-track-dark);
+}
+
+:root:has(> head > meta[name="color-scheme"][content="light"]) {
+  color-scheme: light;
+}
+
+@supports (color: light-dark(white, black)) {
+  :root {
+    --bg-app: light-dark(var(--cae-bg-light), var(--cae-bg-dark));
+    --bg-panel: light-dark(var(--cae-panel-light), var(--cae-panel-dark));
+    --bg-elevated: light-dark(var(--cae-elevated-light), var(--cae-elevated-dark));
+    --border-subtle: light-dark(var(--cae-border-light), var(--cae-border-dark));
+    --text-primary: light-dark(var(--cae-text-light), var(--cae-text-dark));
+    --text-muted: light-dark(var(--cae-muted-light), var(--cae-muted-dark));
+    --accent-primary: light-dark(var(--cae-accent-light), var(--cae-accent-dark));
+    --scrollbar-thumb: light-dark(
+      var(--cae-scrollbar-thumb-light),
+      var(--cae-scrollbar-thumb-dark)
+    );
+    --scrollbar-track: light-dark(
+      var(--cae-scrollbar-track-light),
+      var(--cae-scrollbar-track-dark)
+    );
+  }
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+  accent-color: var(--accent-primary);
+}
+
+.font-mono-tech {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.cae-scroll {
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  scrollbar-width: thin;
+}
+
+@supports not (scrollbar-color: auto) {
+  .cae-scroll {
+    scrollbar-width: auto;
+  }
+  .cae-scroll::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .cae-scroll::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 4px;
+  }
+  .cae-scroll::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+  }
+}
+
+dialog:modal {
+  overscroll-behavior: contain;
+}
+
+dialog::backdrop {
+  overflow: hidden;
+  overscroll-behavior: contain;
+  background-color: rgb(2 6 23 / 0.72);
+  backdrop-filter: blur(2px);
+}
+
+:where(a:any-link, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.visually-hidden:where(:not(:focus-within, :active)) {
+  position: absolute !important;
+  clip-path: inset(50%) !important;
+  overflow: hidden !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: -1px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  white-space: nowrap !important;
+}
