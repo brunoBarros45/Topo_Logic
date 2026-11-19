@@ -60,12 +60,14 @@ This roadmap tracks the evolution of **`Topo_Logic`** from architectural foundat
 
 ---
 
-## Phase 4 — Multi-Format CAD & Decoupled Web Frontend 📋 Planned
-- **Additional Surface/CAD Importers**:
-  - `.OBJ`, `.PLY`, and `.STEP` B-Rep ingestion plugged into `GeometryImporterPort` without modifying use cases or solvers.
-  - Persistent `CadFaceTagSelector` mapping for `.STEP` faces.
-- **Web Frontend (Stack Selected Separately)**:
-  - Interactive 3D CAE viewport with dihedral-angle flood-fill face selection, support/load 3D gizmos, linear-space Von Mises & displacement colormaps, deformed shape + ghost wireframe overlay, XYZ clipping planes, and live streaming TopOpt viewer.
+## Phase 4 — Multi-Format CAD, Binary Exchange Formats & Decoupled Web Frontend ✅ Done
+- **Multi-Format Surface/CAD Importers (`CompositeGeometryImporter`)**:
+  - Native MIT `.STL`, `.OBJ`, and `.PLY` ingestion (`TrimeshSurfaceImporter`) plus external `Gmsh` CLI subprocess adapter for `.STEP`/`.STP` (`GmshStepImporter`) preserving strict MIT core licensing.
+- **Binary Scientific Exchange Formats (`src/topo_logic/infrastructure/exporters/`)**:
+  - Pure-Python MIT compressed VTK XML writers (`.vtp` exterior FEM/surface PolyData for VTK.js, `.vti` 1-voxel zero-halo Fortran ImageData for TopOpt, `.vtu` full volumetric UnstructuredGrid for ParaView) and `.glb` glTF 2.0 previews.
+- **Web Frontend (`frontend/` via `pnpm`)**:
+  - **React 19 + TypeScript + Vite 7 + Tailwind CSS v4 + shadcn/ui + Lucide** with CAE Dark/Light theme and ES/EN i18n.
+  - Off-React `SceneResourceRegistry` (LRU + `.dispose()`/`.delete()`), BVH dihedral flood-fill picking in **React Three Fiber / Three.js**, **VTK.js** scientific post-processing (colapsable XYZ clipping, 60 FPS `Float32` deformation warp + ghost wireframe, point probe, `vtkImageMarchingCubes`), synchronized camera bridge + Split Compare, TanStack Query + Zustand + WebSocket streaming, **Recharts** live/historical convergence + multi-simulation comparison, and **Vitest + RTL + Playwright** verification.
 
 ---
 

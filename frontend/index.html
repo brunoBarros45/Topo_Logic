@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark light" />
+    <script>
+      try {
+        var stored = localStorage.getItem("topo-color-scheme") || "dark";
+        var meta = document.querySelector('meta[name="color-scheme"]');
+        if (meta) meta.content = stored;
+        var resolvedDark =
+          stored === "dark" ||
+          (stored === "light dark" &&
+            window.matchMedia &&
+            window.matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.classList.toggle("dark", resolvedDark);
+      } catch (_err) {
+        document.documentElement.classList.add("dark");
+      }
+    </script>
+    <title>Topo_Logic — 3D FEM & Topology Optimization</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

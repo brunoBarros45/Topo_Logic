@@ -4,7 +4,7 @@ La API HTTP/WebSocket de `Topo_Logic` es la frontera oficial consumida por el fu
 
 ---
 
-## 1. Endpoints Implementados (Fases 1, 2 y 3 Operativas)
+## 1. Endpoints Implementados (Fases 1, 2, 3 y 4 Operativas)
 
 ### 1.1. Salud y Descubrimiento de Capacidades
 - `GET /api/v1/health`
@@ -12,9 +12,9 @@ La API HTTP/WebSocket de `Topo_Logic` es la frontera oficial consumida por el fu
     ```json
     {
       "status": "ok",
-      "version": "0.3.0a0",
+      "version": "0.4.0a0",
       "execution_mode": "local_first",
-      "supported_formats": ["stl"]
+      "supported_formats": ["obj", "ply", "step", "stl"]
     }
     ```
   - Uso clave: tanto el Frontend Web como el Add-In de Fusion 360 consultan este endpoint al arrancar para verificar conectividad y qué formatos 3D acepta el servidor.
@@ -28,10 +28,10 @@ La API HTTP/WebSocket de `Topo_Logic` es la frontera oficial consumida por el fu
 - `GET /api/v1/projects` (`200 OK`)
 - `GET /api/v1/projects/{project_id}` (`200 OK`)
 
-### 1.4. Ingesta, Diagnóstico y Descarga de Geometría `.STL`
+### 1.4. Ingesta Multi-Formato (`.STL`, `.OBJ`, `.PLY`, `.STEP`), Diagnóstico y Descarga (Fases 1 y 4)
 - `POST /api/v1/projects/{project_id}/geometries/upload` (`201 Created`, `multipart/form-data`)
   - Campos form:
-    - `file`: archivo `.stl` (binario o ASCII)
+    - `file`: archivo `.stl`, `.obj`, `.ply`, `.step` o `.stp`
     - `unit_system`: `"mm_N_MPa"` *(default)* | `"m_N_Pa"`
     - `axis_convention`: `"Z_up"` *(default)* | `"Y_up"`
     - `auto_repair`: `true` *(default)* | `false`
@@ -39,22 +39,31 @@ La API HTTP/WebSocket de `Topo_Logic` es la frontera oficial consumida por el fu
 - `GET /api/v1/projects/{project_id}/geometries` (`200 OK`)
 - `GET /api/v1/geometries/{geometry_id}` (`200 OK`)
 - `GET /api/v1/geometries/{geometry_id}/download?variant=repaired|raw` (`200 OK`, `application/octet-stream`)
+- `GET /api/v1/geometries/{geometry_id}/preview.glb?variant=repaired|raw` (`200 OK`, `model/gltf-binary`) — Exporta la superficie como glTF 2.0 binario (`.glb`) para el visor React Three Fiber. *(Si `variant=raw` en formatos no-STL requiere `auto_repair=true`.)*
 
-### 1.5. Mallado Volumétrico y Superficie de Picking (Fase 2)
+### 1.5. Mallado Volumétrico y Superficie de Picking (Fases 2 y 4)
 - `POST /api/v1/projects/{project_id}/meshes` (`201 Created`) — `{ "geometry_id": "...", "element_type": "H8"|"C3D4"|"C3D10", "target_element_size": 5.0 }`
 - `GET /api/v1/projects/{project_id}/meshes` (`200 OK`)
 - `GET /api/v1/meshes/{mesh_id}` (`200 OK`)
 - `GET /api/v1/meshes/{mesh_id}/surface` (`200 OK`) — Devuelve vértices `nodes` y triángulos exteriores `surface_triangles` indexados 1:1 a los nodos volumétricos.
+- `GET /api/v1/meshes/{mesh_id}/surface.glb` (`200 OK`, `model/gltf-binary`) — Superficie exterior en glTF 2.0 binario preservando índices de vértice.
+- `GET /api/v1/meshes/{mesh_id}/surface.vtp` (`200 OK`, `application/octet-stream`) — Superficie exterior en `VTK XML PolyData` comprimido con `zlib`.
 
-### 1.6. Estudios FEM Estáticos Multi-Loadcase y Campos Binarios `Float32` (Fase 2)
+### 1.6. Estudios FEM Estáticos Multi-Loadcase, Campos `Float32` y Exportación `.vtp`/`.vtu` (Fases 2 y 4)
 - `POST /api/v1/projects/{project_id}/studies/fem` (`202 Accepted` -> `JobResponse`) — Recibe `geometry_id`, `mesh_id`, `unit_system`, `material` (`preset_id` o constantes propias), `regions` (`plane`, `bounding_box`, `triangle_set`, `cad_face_tag`), `supports` y `load_cases[]` (`force`, `pressure`).
-- `GET /api/v1/jobs/{job_id}/fem-summary` (`200 OK`) — Devuelve `FemResultSummaryResponse` con compliance, rangos de desplazamiento/Von Mises, factor de seguridad mínimo y chequeo de equilibrio estático por caso de carga.
+- `GET /api/v1/jobs/{job_id}/fem-summary` (`200 OK`) — Devuelve `FemResultSummaryResponse` con `mesh_id`, compliance, rangos de desplazamiento/Von Mises, factor de seguridad mínimo y chequeo de equilibrio estático por caso de carga.
 - `GET /api/v1/jobs/{job_id}/fields/{load_case_id}?field=displacement|displacement_magnitude|von_mises|safety_factor` (`200 OK`, `application/octet-stream`) — Devuelve buffer binario little-endian `Float32` con headers `X-Topo-Dtype`, `X-Topo-Shape`, `X-Topo-Unit`, `X-Topo-Min`, `X-Topo-Max`.
+- `GET /api/v1/jobs/{job_id}/fem-results/{load_case_id}.vtp` (`200 OK`, `application/octet-stream`) — Superficie exterior con todos los `PointData` FEM para renderizado interactivo en `VTK.js`.
+- `GET /api/v1/jobs/{job_id}/fem-results/{load_case_id}.vtu` (`200 OK`, `application/octet-stream`) — Malla volumétrica completa + resultados nodales en `VTK XML UnstructuredGrid` para ParaView/auditoría externa.
 
-### 1.7. Optimización Topológica 3D y Reconstrucción `.STL` (Fase 3)
+### 1.7. Optimización Topológica 3D, Historial y Artefactos `.vti`/`.vtu`/`.glb`/`.stl` (Fases 3 y 4)
 - `POST /api/v1/projects/{project_id}/studies/topopt` (`202 Accepted` -> `JobResponse`) — Recibe `geometry_id`, `mesh_id` (malla `H8`), `unit_system`, `material`, `regions`, `supports`, `load_cases[]`, `target_volume_fraction`, `penalty`, `filter_kind` (`cone_density` | `heaviside_projection`), `optimizer_kind` (`oc` | `mma`), `stress_constraint` (`enabled`, `max_von_mises`, `p_norm_exponent`, `use_adaptive_scaling`) y `design_zones[]` (`passive_solid` | `passive_void`).
-- `GET /api/v1/jobs/{job_id}/topopt-summary` (`200 OK`) — Devuelve `TopOptResultSummaryResponse` (`iterations_completed`, `converged`, `final_compliance`, `final_volume_fraction` y `weight_savings` en `kg`, `g` y `%`).
+- `GET /api/v1/jobs/{job_id}/topopt-summary` (`200 OK`) — Devuelve `TopOptResultSummaryResponse` (`mesh_id`, `iterations_completed`, `converged`, `final_compliance`, `final_volume_fraction` y `weight_savings` en `kg`, `g` y `%`).
+- `GET /api/v1/jobs/{job_id}/topopt-history` (`200 OK`) — Devuelve `TopOptHistoryResponse` (`job_id`, `points[]`) con toda la serie iterativa persistida para gráficos Recharts y comparación multi-simulación.
+- `GET /api/v1/jobs/{job_id}/topopt-densities.vti` (`200 OK`, `application/octet-stream`) — Grilla 3D de densidades con halo de ceros de 1 vóxel en `VTK XML ImageData` (`.vti`) para `vtkImageMarchingCubes` en `VTK.js`.
+- `GET /api/v1/jobs/{job_id}/topopt-results.vtu` (`200 OK`, `application/octet-stream`) — Malla `H8` completa con `CellData` `density` y `density_raw` en `VTK XML UnstructuredGrid`.
 - `GET /api/v1/jobs/{job_id}/reconstructed-stl` (`200 OK`, `application/octet-stream`) — Descarga la superficie `.STL` binaria *watertight* reconstruida por Marching Cubes (con halo de ceros) + suavizado Taubin en coordenadas CAD del modelo original.
+- `GET /api/v1/jobs/{job_id}/reconstructed.glb` (`200 OK`, `model/gltf-binary`) — Descarga la superficie reconstruida en glTF 2.0 binario.
 - `GET /api/v1/jobs/{job_id}/densities` (`200 OK`, `application/octet-stream`) — Devuelve densidades físicas `Float32` little-endian por elemento activo junto con headers `X-Topo-Dtype`, `X-Topo-Shape`, `X-Topo-Voxel-Shape`, `X-Topo-Min`, `X-Topo-Max`.
 
 ### 1.8. Jobs y Cancelación Cooperativa
@@ -80,6 +89,8 @@ La API HTTP/WebSocket de `Topo_Logic` es la frontera oficial consumida por el fu
         "volume_fraction": 0.301,
         "max_density_change": 0.018,
         "max_von_mises": 142.3,
+        "strain_energy": 6.24,
+        "remaining_mass_kg": 0.421,
         "penalty": 3.0,
         "beta": 1.0
       }
@@ -95,17 +106,17 @@ Todas las excepciones de dominio se mapean automáticamente a HTTP limpio (`404`
 ```json
 {
   "code": "unsupported_format",
-  "message": "Format '.obj' is not enabled yet in this phase. Currently supported formats: ['stl'].",
+  "message": "Format '.usd' is not supported. Supported formats: ['obj', 'ply', 'step', 'stl'].",
   "details": {
-    "format": "obj",
-    "supported_formats": ["stl"]
+    "format": "usd",
+    "supported_formats": ["obj", "ply", "step", "stl"]
   }
 }
 ```
 
 ---
 
-## 3. Contratos Planificados para Fase 4 (`[Fase 4]`)
+## 3. Contratos Planificados para Fase 5 (`[Fase 5]`)
 
-- `[Fase 4]` Extensión de `POST /api/v1/projects/{project_id}/geometries/upload` para soportar `.OBJ`, `.PLY` y `.STEP` además de `.STL`.
-- `[Fase 4]` Exposición de selectores B-Rep persistentes (`CadFaceTagSelector`) al importar modelos `.STEP`.
+- `[Fase 5]` Integración nativa del **Add-In de Autodesk Fusion 360** usando este mismo contrato REST/WS/Binario y selectores `CadFaceTagSelector` persistentes por atributo B-Rep.
+- `[Fase 5]` Adaptadores Cloud opcionales (almacenamiento de artefactos compatible S3, repositorio Postgres y cola distribuida Redis) detrás de los mismos puertos hexagonales.

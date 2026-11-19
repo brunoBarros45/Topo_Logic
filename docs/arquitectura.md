@@ -9,19 +9,19 @@
 ```mermaid
 flowchart TB
     subgraph Clientes["Clientes Desacoplados"]
-        WEB["Frontend Web (Fase 4)"]
+        WEB["Frontend Web (React 19 + R3F + VTK.js — Fase 4)"]
         FUSION["Fusion 360 Add-In (Fase 5)"]
         CLI["CLI (topo-logic)"]
     end
 
     subgraph Capa4["Capa 4: Interfaces (src/topo_logic/interfaces/)"]
-        API["FastAPI REST + WebSocket"]
+        API["FastAPI REST + Binary (.vtp/.vti/.vtu/.glb) + WebSocket"]
         DEPS["Composition Root (dependencies.py)"]
         CLIMAIN["CLI (cli/main.py)"]
     end
 
     subgraph Capa2["Capa 2: Application (src/topo_logic/application/)"]
-        UC["Casos de Uso (ProjectService, IngestGeometryUseCase, JobService)"]
+        UC["Casos de Uso (Project | IngestGeometry | GenerateMesh | RunStaticFem | RunTopOpt | JobService)"]
         PORTS["Puertos (typing.Protocol)"]
     end
 
@@ -30,7 +30,10 @@ flowchart TB
     end
 
     subgraph Capa3["Capa 3: Infrastructure (src/topo_logic/infrastructure/)"]
-        MESH["Mesh (trimesh STL / futuro H8 y Gmsh CLI)"]
+        MESH["Mesh (CompositeImporter .STL/.OBJ/.PLY/.STEP + VoxelH8 + GmshCli)"]
+        FEM["FEM (StaticFemSolver H8/C3D4/C3D10 + splu/pyamg)"]
+        TOPOPT["TopOpt (SimpTopologyOptimizer OC/MMA + P-norm + Taubin STL)"]
+        EXP["Exporters (.vtp / .vti / .vtu zlib + .glb)"]
         STORE["Persistencia Local-First (LocalFs + SQLite WAL)"]
         EXEC["Ejecucion (InMemoryEventBus + LocalJobQueue)"]
     end
@@ -39,10 +42,10 @@ flowchart TB
     CLI --> CLIMAIN
     API & CLIMAIN --> UC
     DEPS --> API
-    DEPS --> MESH & STORE & EXEC
+    DEPS --> MESH & FEM & TOPOPT & EXP & STORE & EXEC
     UC --> DOM
     UC -.depende de.-> PORTS
-    MESH & STORE & EXEC -.implementan.-> PORTS
+    MESH & FEM & TOPOPT & STORE & EXEC -.implementan.-> PORTS
 ```
 
 ---
