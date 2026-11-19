@@ -22,6 +22,7 @@ from topo_logic.interfaces.api.schemas.studies import (
     BoundaryRegionSchema,
     BoundingBoxSelectorSchema,
     CadFaceTagSelectorSchema,
+    DesignZoneSchema,
     EquilibriumCheckResponse,
     FemResultSummaryResponse,
     FemStudyCreateRequest,
@@ -32,8 +33,12 @@ from topo_logic.interfaces.api.schemas.studies import (
     MaterialInputSchema,
     PlaneSelectorSchema,
     PressureLoadSchema,
+    StressConstraintSchema,
     SupportBCSchema,
+    TopOptResultSummaryResponse,
+    TopOptStudyCreateRequest,
     TriangleSetSelectorSchema,
+    WeightSavingsResponse,
 )
 
 __all__ = [
@@ -41,6 +46,7 @@ __all__ = [
     "BoundingBoxResponse",
     "BoundingBoxSelectorSchema",
     "CadFaceTagSelectorSchema",
+    "DesignZoneSchema",
     "EquilibriumCheckResponse",
     "ErrorEnvelope",
     "FemResultSummaryResponse",
@@ -63,7 +69,11 @@ __all__ = [
     "ProjectResponse",
     "RepairReportResponse",
     "ScaleGuardResponse",
+    "StressConstraintSchema",
     "SupportBCSchema",
+    "TopOptResultSummaryResponse",
+    "TopOptStudyCreateRequest",
     "TriangleSetSelectorSchema",
     "VolumeMeshResponse",
+    "WeightSavingsResponse",
 ]
