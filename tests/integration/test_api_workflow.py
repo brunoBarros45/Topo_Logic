@@ -22,7 +22,7 @@ def test_health_projects_and_stl_upload_download_flow(app_client: TestClient) ->
     health_data = health_resp.json()
     assert health_data["status"] == "ok"
     assert health_data["execution_mode"] == "local_first"
-    assert health_data["supported_formats"] == ["stl"]
+    assert health_data["supported_formats"] == ["obj", "ply", "step", "stl"]
 
     proj_resp = app_client.post(
         "/api/v1/projects",
@@ -74,13 +74,13 @@ def test_api_error_envelopes_and_job_websocket_snapshot(app_client: TestClient) 
     proj_resp = app_client.post("/api/v1/projects", json={"name": "Error & WS Test"})
     project_id = proj_resp.json()["id"]
 
-    # Unsupported .obj upload in Phase 1 returns standardized 415 ErrorEnvelope
-    obj_resp = app_client.post(
+    # Unsupported .fbx upload returns standardized 415 ErrorEnvelope
+    bad_fmt_resp = app_client.post(
         f"/api/v1/projects/{project_id}/geometries/upload",
-        files={"file": ("part.obj", b"v 0 0 0\n", "text/plain")},
+        files={"file": ("part.fbx", b"solid bad\n", "application/octet-stream")},
     )
-    assert obj_resp.status_code == 415
-    assert obj_resp.json()["code"] == "unsupported_format"
+    assert bad_fmt_resp.status_code == 415
+    assert bad_fmt_resp.json()["code"] == "unsupported_format"
 
     # Non-existent project returns 404 ErrorEnvelope
     missing_resp = app_client.get("/api/v1/projects/does-not-exist")
@@ -168,6 +168,19 @@ def test_end_to_end_stl_mesh_fem_and_binary_fields_flow(app_client: TestClient) 
     assert surface["node_count"] == mesh["node_count"]
     assert len(surface["surface_triangles"]) == mesh["surface_triangle_count"]
 
+    geom_glb = app_client.get(f"/api/v1/geometries/{geom_id}/preview.glb")
+    assert geom_glb.status_code == 200
+    assert geom_glb.headers["content-type"] == "model/gltf-binary"
+    assert geom_glb.content[:4] == b"glTF"
+
+    mesh_glb = app_client.get(f"/api/v1/meshes/{mesh_id}/surface.glb")
+    assert mesh_glb.status_code == 200
+    assert mesh_glb.content[:4] == b"glTF"
+
+    mesh_vtp = app_client.get(f"/api/v1/meshes/{mesh_id}/surface.vtp")
+    assert mesh_vtp.status_code == 200
+    assert b'<VTKFile type="PolyData"' in mesh_vtp.content
+
     # Submit multi-loadcase static FEM study
     fem_req = {
         "geometry_id": geom_id,
@@ -254,6 +267,16 @@ def test_end_to_end_stl_mesh_fem_and_binary_fields_flow(app_client: TestClient) 
     disp_arr = np.frombuffer(disp_resp.content, dtype="<f4").reshape(-1, 3)
     assert disp_arr.shape == (mesh["node_count"], 3)
 
+    # Download FEM VTK XML PolyData (.vtp for VTK.js) and UnstructuredGrid (.vtu for ParaView)
+    fem_vtp = app_client.get(f"/api/v1/jobs/{job_id}/fem-results/lc-bend.vtp")
+    assert fem_vtp.status_code == 200
+    assert b'<VTKFile type="PolyData"' in fem_vtp.content
+    assert b'Name="von_mises"' in fem_vtp.content
+
+    fem_vtu = app_client.get(f"/api/v1/jobs/{job_id}/fem-results/lc-bend.vtu")
+    assert fem_vtu.status_code == 200
+    assert b'<VTKFile type="UnstructuredGrid"' in fem_vtu.content
+
 
 @pytest.mark.integration
 def test_end_to_end_stl_mesh_topopt_reconstructed_stl_and_densities_flow(
@@ -263,14 +286,28 @@ def test_end_to_end_stl_mesh_topopt_reconstructed_stl_and_densities_flow(
 
     beam = trimesh.creation.box(extents=(50.0, 20.0, 20.0))
     beam.apply_translation((25.0, 10.0, 10.0))
-    beam_raw = beam.export(file_type="stl")
-    beam_bytes = beam_raw if isinstance(beam_raw, bytes) else bytes(beam_raw)
+    obj_raw = beam.export(file_type="obj")
+    obj_bytes = obj_raw.encode("utf-8") if isinstance(obj_raw, str) else bytes(obj_raw)
 
-    geom_id = app_client.post(
+    upload_obj = app_client.post(
         f"/api/v1/projects/{proj_id}/geometries/upload",
-        files={"file": ("bracket.stl", beam_bytes, "application/octet-stream")},
+        files={"file": ("bracket.obj", obj_bytes, "text/plain")},
         data={"unit_system": "mm_N_MPa", "axis_convention": "Z_up", "auto_repair": "true"},
-    ).json()["id"]
+    )
+    assert upload_obj.status_code == 201
+    assert upload_obj.json()["format"] == "obj"
+    geom_id = upload_obj.json()["id"]
+
+    # Also verify PLY multi-format upload works
+    ply_raw = beam.export(file_type="ply")
+    ply_bytes = ply_raw if isinstance(ply_raw, bytes) else bytes(ply_raw)
+    upload_ply = app_client.post(
+        f"/api/v1/projects/{proj_id}/geometries/upload",
+        files={"file": ("bracket.ply", ply_bytes, "application/octet-stream")},
+        data={"unit_system": "mm_N_MPa", "axis_convention": "Z_up", "auto_repair": "true"},
+    )
+    assert upload_ply.status_code == 201
+    assert upload_ply.json()["format"] == "ply"
 
     mesh = app_client.post(
         f"/api/v1/projects/{proj_id}/meshes",
@@ -356,3 +393,23 @@ def test_end_to_end_stl_mesh_topopt_reconstructed_stl_and_densities_flow(
     assert dens_resp.headers["X-Topo-Voxel-Shape"] == "10,4,4"
     dens_arr = np.frombuffer(dens_resp.content, dtype="<f4")
     assert len(dens_arr) == mesh["element_count"]
+
+    hist_resp = app_client.get(f"/api/v1/jobs/{job_id}/topopt-history")
+    assert hist_resp.status_code == 200
+    points = hist_resp.json()["points"]
+    assert len(points) == summary["iterations_completed"]
+    assert points[-1]["strain_energy"] == pytest.approx(0.5 * points[-1]["compliance"])
+    assert points[-1]["remaining_mass_kg"] > 0.0
+
+    vti_resp = app_client.get(f"/api/v1/jobs/{job_id}/topopt-densities.vti")
+    assert vti_resp.status_code == 200
+    assert b'<VTKFile type="ImageData"' in vti_resp.content
+
+    vtu_resp = app_client.get(f"/api/v1/jobs/{job_id}/topopt-results.vtu")
+    assert vtu_resp.status_code == 200
+    assert b'<VTKFile type="UnstructuredGrid"' in vtu_resp.content
+
+    glb_resp = app_client.get(f"/api/v1/jobs/{job_id}/reconstructed.glb")
+    assert glb_resp.status_code == 200
+    assert glb_resp.headers["content-type"] == "model/gltf-binary"
+    assert glb_resp.content[:4] == b"glTF"
