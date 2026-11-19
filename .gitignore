@@ -57,3 +57,6 @@ coverage/
 Thumbs.db
 .vscode/*
 !.vscode/extensions.json
+
+# Local runtime data
+.topo_logic_data/
