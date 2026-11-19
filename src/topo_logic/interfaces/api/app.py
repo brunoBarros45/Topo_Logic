@@ -89,6 +89,15 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=[
+            "X-Topo-Dtype",
+            "X-Topo-Shape",
+            "X-Topo-Voxel-Shape",
+            "X-Topo-Unit",
+            "X-Topo-Min",
+            "X-Topo-Max",
+            "Content-Disposition",
+        ],
     )
 
     _register_domain_exception_handlers(app)

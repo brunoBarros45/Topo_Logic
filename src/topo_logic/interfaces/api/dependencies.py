@@ -19,9 +19,11 @@ from topo_logic.infrastructure.config import AppSettings
 from topo_logic.infrastructure.execution import InMemoryEventBus, LocalJobQueue
 from topo_logic.infrastructure.fem import StaticFemSolver
 from topo_logic.infrastructure.mesh import (
+    CompositeGeometryImporter,
     CompositeVolumetricMesher,
     GmshCliMesher,
-    TrimeshStlImporter,
+    GmshStepImporter,
+    TrimeshSurfaceImporter,
     TrimeshSurfaceRepairer,
     VoxelH8Mesher,
 )
@@ -71,7 +73,7 @@ def build_container(settings: AppSettings) -> AppContainer:
     mesh_repo = SqliteMeshRepository(database)
     job_repo = SqliteJobRepository(database)
 
-    importer = TrimeshStlImporter()
+    importer = CompositeGeometryImporter([TrimeshSurfaceImporter(), GmshStepImporter()])
     repairer = TrimeshSurfaceRepairer()
     mesher = CompositeVolumetricMesher([VoxelH8Mesher(), GmshCliMesher()])
     fem_solver = StaticFemSolver()

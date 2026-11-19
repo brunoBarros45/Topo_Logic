@@ -8,8 +8,11 @@ from typing import Literal
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
 
 from topo_logic.application.use_cases import IngestGeometryUseCase
+from topo_logic.domain.exceptions import DomainValidationError
+from topo_logic.domain.geometry import GeometryFormat
 from topo_logic.domain.units import AxisConvention, UnitSystem
 from topo_logic.infrastructure.config import AppSettings
+from topo_logic.infrastructure.exporters import export_stl_to_glb
 from topo_logic.interfaces.api.dependencies import (
     get_ingest_geometry_use_case,
     get_settings,
@@ -94,4 +97,32 @@ def download_geometry(
         content=payload,
         media_type="application/octet-stream",
         headers={"Content-Disposition": f'attachment; filename="{download_name}"'},
+    )
+
+
+@router.get("/geometries/{geometry_id}/preview.glb")
+def preview_geometry_glb(
+    geometry_id: str,
+    variant: Literal["repaired", "raw"] = "repaired",
+    ingest_use_case: IngestGeometryUseCase = Depends(get_ingest_geometry_use_case),  # noqa: B008
+) -> Response:
+    """Export geometry surface as binary glTF 2.0 (.glb) for React Three Fiber preview."""
+    asset, payload = ingest_use_case.read_geometry_bytes(
+        geometry_id,
+        prefer_repaired=(variant == "repaired"),
+    )
+    if variant == "raw" and asset.format is not GeometryFormat.STL:
+        if asset.repaired_artifact_key is None:
+            raise DomainValidationError(
+                f"GLB preview from raw '.{asset.format.value}' requires auto_repair=True.",
+                details={"geometry_id": geometry_id, "format": asset.format.value},
+            )
+        _, payload = ingest_use_case.read_geometry_bytes(geometry_id, prefer_repaired=True)
+
+    glb_bytes = export_stl_to_glb(payload)
+    stem = Path(asset.filename).stem or "geometry"
+    return Response(
+        content=glb_bytes,
+        media_type="model/gltf-binary",
+        headers={"Content-Disposition": f'inline; filename="{stem}.glb"'},
     )
