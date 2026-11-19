@@ -4,9 +4,18 @@ Thank you for helping build **`Topo_Logic`**, an open-source web platform for 3D
 
 ## Getting Started
 
-1. Fork the repository and create a topic branch from `main` (`feat/...`, `fix/...`, `docs/...`).
-2. Keep changes focused, documented, and accompanied by verification tests (especially analytical benchmarks for FEM/TopOpt changes).
-3. Open a Pull Request describing the motivation, numerical or UI changes, and test results.
+1. Fork the repository and create a topic branch from **`develop`** (`feat/...`, `fix/...`, `docs/...`, `refactor/...`, `chore/...`).
+2. Follow **Conventional Commits** (`<type>(<scope>): <imperative summary>`).
+3. Keep changes focused, documented, and accompanied by verification tests (`ruff`, `mypy`, and `pytest -v`, including analytical benchmarks for FEM/TopOpt changes).
+4. Open a Pull Request targeting **`develop`** describing the motivation, numerical or UI changes, and test results. Stable releases are promoted from `develop` into `main` via Release PRs.
+
+### Branch & Commit Quick Reference
+
+| Branch / Type | Purpose |
+| :--- | :--- |
+| `main` | Stable releases only (promoted via PR from `develop`) |
+| `develop` | Active integration branch (base for all feature/fix branches) |
+| `feat` / `fix` / `docs` / `refactor` / `test` / `ci` / `chore` | Standard Conventional Commit prefixes (`<type>(<scope>): <summary>`) |
 
 ## License Hygiene (Strict Requirement)
 

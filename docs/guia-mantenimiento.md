@@ -71,3 +71,17 @@ Para instalar dependencias adicionales de optimización/FEM avanzado (Fases 2–
 - **Tipado estricto:** `mypy --strict` debe pasar con cero errores. Evita `Any` y `# type: ignore` salvo causa justificada.
 - **Inmutabilidad en Dominio:** entidades y value objects son `@dataclass(frozen=True)` con validación en `__post_init__`.
 - **Control de versiones:** actualiza la tabla de progreso en `README.md`, `ROADMAP.md` y `CHANGELOG.md` al completar cada hito.
+
+---
+
+## 5. Flujo Git (`main` + `develop` + Conventional Commits)
+
+`Topo_Logic` utiliza un flujo de dos ramas permanentes con commits semánticos:
+
+1. **`main` (solo estable):** nunca recibe commits ni pushes directos. Solo se actualiza mediante **Pull Request desde `develop`** cuando un hito está probado y con CI en verde (más tag SemVer, ej. `v0.2.0-alpha`).
+2. **`develop` (integración activa):** toda rama de trabajo (`feat/...`, `fix/...`, `docs/...`, `refactor/...`, `chore/...`, `ci/...`) nace desde `develop` y vuelve a `develop` mediante `git merge --no-ff` tras pasar `ruff`, `mypy` y `pytest -v`.
+3. **Conventional Commits (`<tipo>(<scope>): <resumen imperativo>`):**
+   - **Tipos:** `feat`, `fix`, `docs`, `refactor`, `test`, `perf`, `build`, `ci`, `chore`.
+   - **Scopes:** `project`, `domain`, `application`, `mesh`, `fem`, `topopt`, `storage`, `api`, `cli`, `docs`, `ci`, `workflow`, `frontend`, `fusion360`.
+4. **Cadencia por hito o cambio grande:**
+   - Al cerrar un bloque de trabajo en la rama de feature: verificar checks → merge `--no-ff` a `develop` → eliminar rama temporal → `git push origin develop` → abrir PR `develop → main` cuando el hito esté listo para release.
