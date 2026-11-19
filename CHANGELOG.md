@@ -4,6 +4,27 @@ All notable changes to **`Topo_Logic`** will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0-alpha] - 2026-11-19 — Milestone 3: 3D Topology Optimization Engine (SIMP + OC & MIT MMA)
+
+### Added
+- **3D SIMP Topology Optimization Engine (`src/topo_logic/infrastructure/topopt/`)**:
+  - `filters.py`: Sparse `scipy.spatial.cKDTree` cone density filter (`ConeDensityFilter`), smooth Heaviside projection (`heaviside_project`, `heaviside_derivative`), and unified `CompositeDensityFilter` with exact forward and adjoint chain-rule sensitivities.
+  - `oc_optimizer.py`: Optimality Criteria (`oc_update`) with monotone Lagrange-multiplier bisection, move limits, and passive solid/void clamping.
+  - `mma_optimizer.py`: Svanberg `MMA2007` primal-dual interior-point subproblem solver (`MmaOptimizer`) adapted strictly from MIT-licensed `pyMOTO` (`Copyright (c) 2023 Arnoud Delissen`) with full copyright preservation.
+  - `stress_aggregation.py`: Overflow-safe log-sum-exp relaxed P-norm Von Mises stress evaluation and exact adjoint sensitivity solver (`compute_relaxed_pnorm_stress_and_adjoint`) reusing factorized `K_ff`.
+  - `simp_engine.py`: `SimpTopologyOptimizer` supporting multi-loadcase weighted compliance minimization, SIMP penalty & Heaviside continuation, `PASSIVE_SOLID`/`PASSIVE_VOID` `DesignZone` resolution, `OC`/`MMA` optimization, adaptive P-norm stress scaling, `WeightSavingsMetrics` (`kg`, `g`, `%`), and cooperative cancellation.
+  - `reconstruction.py`: `WatertightStlReconstructor` with 1-voxel zero-halo padding, bisection isosurface threshold targeting the physical volume fraction, `skimage.measure.marching_cubes`, CAD world coordinate alignment, pure-SciPy volume-preserving Taubin smoothing, `trimesh` watertightness/normal enforcement, and `extract_binary_densities`.
+- **Application & FastAPI Endpoints**:
+  - Added `ReconstructedSurface` to `application/ports/simulation.py` and implemented `RunTopOptUseCase` (`application/use_cases/run_topopt.py`) managing `OPTIMIZING -> RECONSTRUCTING -> COMPLETED` job states and live `topopt.iteration` WebSocket telemetry.
+  - Added schemas (`DesignZoneSchema`, `StressConstraintSchema`, `TopOptStudyCreateRequest`, `WeightSavingsResponse`, `TopOptResultSummaryResponse`) and REST endpoints:
+    - `POST /api/v1/projects/{project_id}/studies/topopt`
+    - `GET /api/v1/jobs/{job_id}/topopt-summary`
+    - `GET /api/v1/jobs/{job_id}/reconstructed-stl`
+    - `GET /api/v1/jobs/{job_id}/densities` (packed little-endian `Float32` physical element densities)
+- **Verification & Benchmarks**:
+  - Finite-difference sensitivity verification for cone/Heaviside filters and P-norm Von Mises adjoints (`tests/unit/test_topopt_components.py`), analytical KKT quadratic verification for `MmaOptimizer`, and bounds/watertight check for `WatertightStlReconstructor`.
+  - 3D cantilever OC convergence + watertight `.STL`, MMA stress-constrained + `PASSIVE_SOLID`, and multi-loadcase mirror-symmetry bridge benchmarks (`tests/benchmarks/test_topopt_benchmarks.py`), plus end-to-end API + WebSocket `topopt.iteration` + `.STL` integration test.
+
 ## [0.2.0-alpha] - 2026-11-18 — Milestone 2: 3D Linear Static FEM Engine
 
 ### Added

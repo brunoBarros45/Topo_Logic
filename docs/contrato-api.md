@@ -4,7 +4,7 @@ La API HTTP/WebSocket de `Topo_Logic` es la frontera oficial consumida por el fu
 
 ---
 
-## 1. Endpoints Implementados (Fases 1 y 2 Operativas)
+## 1. Endpoints Implementados (Fases 1, 2 y 3 Operativas)
 
 ### 1.1. Salud y Descubrimiento de Capacidades
 - `GET /api/v1/health`
@@ -12,7 +12,7 @@ La API HTTP/WebSocket de `Topo_Logic` es la frontera oficial consumida por el fu
     ```json
     {
       "status": "ok",
-      "version": "0.2.0a0",
+      "version": "0.3.0a0",
       "execution_mode": "local_first",
       "supported_formats": ["stl"]
     }
@@ -51,19 +51,25 @@ La API HTTP/WebSocket de `Topo_Logic` es la frontera oficial consumida por el fu
 - `GET /api/v1/jobs/{job_id}/fem-summary` (`200 OK`) — Devuelve `FemResultSummaryResponse` con compliance, rangos de desplazamiento/Von Mises, factor de seguridad mínimo y chequeo de equilibrio estático por caso de carga.
 - `GET /api/v1/jobs/{job_id}/fields/{load_case_id}?field=displacement|displacement_magnitude|von_mises|safety_factor` (`200 OK`, `application/octet-stream`) — Devuelve buffer binario little-endian `Float32` con headers `X-Topo-Dtype`, `X-Topo-Shape`, `X-Topo-Unit`, `X-Topo-Min`, `X-Topo-Max`.
 
-### 1.7. Jobs y Cancelación Cooperativa
+### 1.7. Optimización Topológica 3D y Reconstrucción `.STL` (Fase 3)
+- `POST /api/v1/projects/{project_id}/studies/topopt` (`202 Accepted` -> `JobResponse`) — Recibe `geometry_id`, `mesh_id` (malla `H8`), `unit_system`, `material`, `regions`, `supports`, `load_cases[]`, `target_volume_fraction`, `penalty`, `filter_kind` (`cone_density` | `heaviside_projection`), `optimizer_kind` (`oc` | `mma`), `stress_constraint` (`enabled`, `max_von_mises`, `p_norm_exponent`, `use_adaptive_scaling`) y `design_zones[]` (`passive_solid` | `passive_void`).
+- `GET /api/v1/jobs/{job_id}/topopt-summary` (`200 OK`) — Devuelve `TopOptResultSummaryResponse` (`iterations_completed`, `converged`, `final_compliance`, `final_volume_fraction` y `weight_savings` en `kg`, `g` y `%`).
+- `GET /api/v1/jobs/{job_id}/reconstructed-stl` (`200 OK`, `application/octet-stream`) — Descarga la superficie `.STL` binaria *watertight* reconstruida por Marching Cubes (con halo de ceros) + suavizado Taubin en coordenadas CAD del modelo original.
+- `GET /api/v1/jobs/{job_id}/densities` (`200 OK`, `application/octet-stream`) — Devuelve densidades físicas `Float32` little-endian por elemento activo junto con headers `X-Topo-Dtype`, `X-Topo-Shape`, `X-Topo-Voxel-Shape`, `X-Topo-Min`, `X-Topo-Max`.
+
+### 1.8. Jobs y Cancelación Cooperativa
 - `GET /api/v1/projects/{project_id}/jobs` (`200 OK`)
 - `GET /api/v1/jobs/{job_id}` (`200 OK`)
 - `POST /api/v1/jobs/{job_id}/cancel` (`200 OK`)
 
-### 1.8. Streaming en Tiempo Real (`WebSocket`)
+### 1.9. Streaming en Tiempo Real (`WebSocket`)
 - `WS /ws/jobs/{job_id}`
   - Al conectarse envía inmediatamente un frame `job.snapshot` con el estado actual del trabajo.
   - Emite eventos incrementales conforme avanzan las etapas (`job.meshing`, `job.solving`, `job.optimizing`, `topopt.iteration`, `job.completed`, `job.cancelled`, `job.failed`).
-  - Formato de frame de control JSON:
+  - Formato de frame de iteración TopOpt (`topopt.iteration` / progreso):
     ```json
     {
-      "event_type": "job.optimizing",
+      "event_type": "topopt.iteration",
       "job_id": "uuid",
       "status": "optimizing",
       "progress": 0.45,
@@ -72,7 +78,10 @@ La API HTTP/WebSocket de `Topo_Logic` es la frontera oficial consumida por el fu
         "iteration": 36,
         "compliance": 12.48,
         "volume_fraction": 0.301,
-        "max_density_change": 0.018
+        "max_density_change": 0.018,
+        "max_von_mises": 142.3,
+        "penalty": 3.0,
+        "beta": 1.0
       }
     }
     ```
@@ -96,7 +105,7 @@ Todas las excepciones de dominio se mapean automáticamente a HTTP limpio (`404`
 
 ---
 
-## 3. Contratos Planificados para Fase 3 (`[Fase 3]`)
+## 3. Contratos Planificados para Fase 4 (`[Fase 4]`)
 
-- `[Fase 3]` `POST /api/v1/projects/{project_id}/studies/topopt` — Lanza optimización SIMP (`OC` o `MMA` con restricción P-norma opcional) y zonas pasivas sólidas/vacías.
-- `[Fase 3]` `GET /api/v1/jobs/{job_id}/reconstructed-stl` — Descarga el `.STL` *watertight* suavizado con Taubin resultante.
+- `[Fase 4]` Extensión de `POST /api/v1/projects/{project_id}/geometries/upload` para soportar `.OBJ`, `.PLY` y `.STEP` además de `.STL`.
+- `[Fase 4]` Exposición de selectores B-Rep persistentes (`CadFaceTagSelector`) al importar modelos `.STEP`.
