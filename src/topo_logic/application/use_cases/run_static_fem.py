@@ -102,6 +102,7 @@ class RunStaticFemUseCase:
             self._run_worker(
                 job_id=job.id,
                 project_id=project_id,
+                mesh_id=mesh.id,
                 mesh_artifact_key=mesh.artifact_key,
                 study=study,
                 token=token,
@@ -146,11 +147,27 @@ class RunStaticFemUseCase:
         summary = self.get_fem_summary(job_id)
         return summary, self._storage.read_bytes(summary.fields_artifact_key)
 
+    def read_mesh_and_fields(self, job_id: str) -> tuple[FemResultSummary, bytes, bytes]:
+        """Load summary, volume mesh payload, and packed Float32 fields for a completed job."""
+        summary, fields_bytes = self.read_fields_bundle(job_id)
+        if summary.mesh_id is None:
+            raise DomainValidationError(
+                f"FEM job '{job_id}' does not have an associated volume mesh reference."
+            )
+        mesh = self._mesh_repo.get(summary.mesh_id)
+        if mesh is None:
+            raise ResourceNotFoundError(
+                f"Volume mesh '{summary.mesh_id}' for job '{job_id}' was not found.",
+                details={"job_id": job_id, "mesh_id": summary.mesh_id},
+            )
+        return summary, self._storage.read_bytes(mesh.artifact_key), fields_bytes
+
     def _run_worker(
         self,
         *,
         job_id: str,
         project_id: str,
+        mesh_id: str,
         mesh_artifact_key: str,
         study: FemStudyConfig,
         token: CancellationToken,
@@ -184,6 +201,7 @@ class RunStaticFemUseCase:
                 job_id=raw_summary.job_id,
                 load_case_results=raw_summary.load_case_results,
                 fields_artifact_key=stored_fields_key,
+                mesh_id=mesh_id,
             )
             summary_key = f"projects/{project_id}/jobs/{job_id}/fem_summary.json"
             stored_summary_key = self._storage.save_bytes(
@@ -223,6 +241,7 @@ def _serialize_fem_summary(summary: FemResultSummary) -> bytes:
     payload: dict[str, Any] = {
         "job_id": summary.job_id,
         "fields_artifact_key": summary.fields_artifact_key,
+        "mesh_id": summary.mesh_id,
         "load_case_results": [
             {
                 "load_case_id": lc.load_case_id,
@@ -287,8 +306,10 @@ def _deserialize_fem_summary(raw: bytes) -> FemResultSummary:
                 ),
             )
         )
+    mesh_id_raw = data.get("mesh_id")
     return FemResultSummary(
         job_id=str(data["job_id"]),
         load_case_results=tuple(load_cases),
         fields_artifact_key=str(data["fields_artifact_key"]),
+        mesh_id=str(mesh_id_raw) if mesh_id_raw is not None else None,
     )
