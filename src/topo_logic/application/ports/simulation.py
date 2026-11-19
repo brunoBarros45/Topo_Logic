@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Protocol
 
 from topo_logic.application.ports.execution import CancellationToken
@@ -77,6 +78,15 @@ class OptimizerPort(Protocol):
         ...
 
 
+@dataclass(frozen=True)
+class ReconstructedSurface:
+    """Watertight reconstructed surface mesh output from topology density fields."""
+
+    stl_bytes: bytes
+    volume: float
+    is_watertight: bool
+
+
 class SurfaceReconstructorPort(Protocol):
     """Port for converting density fields into smooth, watertight STL/OBJ meshes."""
 
@@ -85,6 +95,6 @@ class SurfaceReconstructorPort(Protocol):
         *,
         density_payload: bytes,
         target_volume_fraction: float,
-    ) -> bytes:
+    ) -> ReconstructedSurface:
         """Extract zero-halo isosurface, apply Taubin smoothing, and export binary STL."""
         ...

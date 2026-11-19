@@ -7,6 +7,7 @@ from topo_logic.application.use_cases.ingest_geometry import IngestGeometryUseCa
 from topo_logic.application.use_cases.manage_jobs import JobService
 from topo_logic.application.use_cases.manage_projects import ProjectService
 from topo_logic.application.use_cases.run_static_fem import RunStaticFemUseCase
+from topo_logic.application.use_cases.run_topopt import RunTopOptUseCase
 
 __all__ = [
     "GenerateMeshUseCase",
@@ -14,4 +15,5 @@ __all__ = [
     "JobService",
     "ProjectService",
     "RunStaticFemUseCase",
+    "RunTopOptUseCase",
 ]
