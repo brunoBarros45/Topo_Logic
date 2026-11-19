@@ -25,9 +25,9 @@ Toda geometría se etiqueta explícitamente con sistema dextrógiro `Z_up` (est�
 
 ---
 
-## 2. Pipeline de Ingesta y Reparación `.STL` (Fase 1 Operativa)
+## 2. Pipeline de Ingesta Multi-Formato y Reparación (`.STL`/`.OBJ`/`.PLY`/`.STEP` — Operativo)
 
-Implementado en `TrimeshStlImporter` y `TrimeshSurfaceRepairer`:
+Implementado en `CompositeGeometryImporter` (`TrimeshSurfaceImporter` MIT para `.STL`/`.OBJ`/`.PLY` + `GmshStepImporter` externo para `.STEP`/`.STP`) y `TrimeshSurfaceRepairer`:
 
 1. **Carga sin procesamiento previo** (`process=False`): permite medir con precisión vértices duplicados y triángulos degenerados del archivo original (en STL binario/ASCII sin indexar, cada triángulo trae 3 vértices separados).
 2. **Validación estructural**: rechaza archivos vacíos, corruptos, sin caras o con coordenadas no finitas (`NaN`/`Inf`).
@@ -99,3 +99,21 @@ $$
 3. Suavizado **Taubin** preservador de volumen (evita adelgazamiento de barras).
 4. Auditoría de variedad/*watertightness* antes de exportar `.STL` binario.
 5. Cálculo consistente de ahorro de masa (`WeightSavingsMetrics` en `src/topo_logic/domain/results.py`): masa original, masa optimizada y masa ahorrada en **`kg`** y **`g`**, más el porcentaje de reducción (`mass_reduction_percent`), convirtiendo automáticamente desde densidad `tonne/mm³` (`mm_N_MPa`) o `kg/m³` (`m_N_Pa`).
+
+---
+
+## 5. Formatos de Intercambio Científico y Visualización Web Dual (Fase 4 Operativa)
+
+Para desacoplar el motor numérico Python del navegador sin serializar mallas masivas en JSON:
+
+1. **Previsualización CAD (`R3F` + `Three.js`):**
+   - El frontend descarga glTF 2.0 binario (`.glb`) desde `/preview.glb` o `/surface.glb`.
+   - Para selección interactiva de caras sin latencia, construye un BVH (`three-mesh-bvh`) y ejecuta *flood-fill* por ángulo diedro sobre triángulos conectados, proyectando las regiones seleccionadas como `TriangleSetSelector`.
+2. **Post-proceso Científico (`VTK.js`):**
+   - **FEM Estático:** descarga `VTK XML PolyData` comprimido con `zlib` (`.vtp`) para el renderizado interactivo con desplazamiento deformado (`vtkWarpVector` / deformación modal), planos de corte X/Y/Z, *colormaps* (`Viridis`, `Plasma`, `Coolwarm`, `Jet`) y sonda puntual (*point probe*); y ofrece descarga de volumen completo `.vtu` (`UnstructuredGrid`) para inspección externa en ParaView.
+   - **Optimización Topológica:** descarga la grilla 3D de densidades con halo de ceros de 1 vóxel en `VTK XML ImageData` (`.vti`) para extracción de isosuperficies interactivas en tiempo real mediante `vtkImageMarchingCubes` en el navegador, además de permitir exportar `.vtu`, `.glb` y `.stl` *watertight*.
+3. **Telemetría y Comparación (`WebSocket` + `Recharts`):**
+   - El progreso iterativo vivo (`topopt.iteration`) y el historial persistido (`/topopt-history`) alimentan gráficos de convergencia de *compliance*, fracción de masa restante y cambio máximo de densidad, permitiendo comparar múltiples simulaciones superpuestas.
+4. **Higiene de Memoria Off-React:**
+   - Todos los `ArrayBuffer`, `Float32Array`, geometrías Three.js/BVH y objetos VTK.js viven fuera del estado global React/Zustand dentro de un registro controlado LRU (`SceneResourceRegistry`) con liberación explícita `.dispose()` / `.delete()`.
+

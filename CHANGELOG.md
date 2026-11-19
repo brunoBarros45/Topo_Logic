@@ -4,6 +4,21 @@ All notable changes to **`Topo_Logic`** will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0-alpha] - 2026-11-19 — Milestone 4: Binary Exchange Formats, Multi-Format CAD & Web Frontend
+
+### Added
+- **Pure-MIT Binary Exchange Exporters (`src/topo_logic/infrastructure/exporters/`)**:
+  - `vtk_xml.py`: Pure-Python + NumPy + `zlib` VTK XML writers (`export_mesh_surface_vtp`, `export_fem_surface_vtp`, `export_fem_volume_vtu` for `H8`/`C3D4`/`C3D10`, and `export_topopt_densities_vti` with 1-voxel zero halo in Fortran order) compatible with `@kitware/vtk.js` and ParaView.
+  - `glb_exporter.py`: Binary glTF 2.0 (`.glb`) exporters for geometry previews and FEM-aligned exterior surfaces.
+- **Multi-Format Geometry Importers (`src/topo_logic/infrastructure/mesh/multi_format_importer.py`)**:
+  - `TrimeshSurfaceImporter` (`.STL`, `.OBJ`, `.PLY`), `GmshStepImporter` (`.STEP`/`.STP` external CLI subprocess), and `CompositeGeometryImporter`, wired into FastAPI & CLI `topo-logic info`.
+- **TopOpt History Persistence & Binary REST Endpoints**:
+  - Persisted `mesh_id` and per-iteration `topopt_history.json` (`strain_energy`, `remaining_mass_kg`), CORS `expose_headers` for `X-Topo-*`/`Content-Disposition`, and new endpoints: `/geometries/{id}/preview.glb`, `/meshes/{id}/surface.glb|.vtp`, `/jobs/{id}/fem-results/{lc}.vtp|.vtu`, `/jobs/{id}/topopt-history`, `/jobs/{id}/topopt-densities.vti`, `/jobs/{id}/topopt-results.vtu`, and `/jobs/{id}/reconstructed.glb`.
+- **Interactive CAE Web Frontend (`frontend/` managed with `pnpm`)**:
+  - React 19 + TypeScript + Vite 7 + Tailwind CSS v4 + shadcn/ui + Lucide (`ES`/`EN`, CAE Dark/Light theme, native `<dialog>` modals).
+  - Off-React `SceneResourceRegistry` (LRU eviction + explicit `.dispose()`/`.delete()`, zero heavy TypedArrays/meshes in React/Zustand), BVH dihedral-angle flood-fill picking & BC gizmos in **React Three Fiber / Three.js**, scientific FEM/TopOpt visualization in **VTK.js** (warp, ghost wireframe, XYZ clipping planes, point probe, `vtkImageMarchingCubes`), bidirectional camera sync + Split Compare mode, **TanStack Query** + **Zustand** + WebSocket streaming, and **Recharts** live/historical convergence & simulation comparison drawer.
+  - Cross-stack Python -> `@kitware/vtk.js` binary verification (`vtkXmlRoundtrip.test.ts`), engine/UI Vitest suite, and Playwright E2E workflow test.
+
 ## [0.3.0-alpha] - 2026-11-19 — Milestone 3: 3D Topology Optimization Engine (SIMP + OC & MIT MMA)
 
 ### Added
