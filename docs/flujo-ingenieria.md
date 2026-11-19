@@ -68,7 +68,9 @@ $$
 
 ---
 
-## 4. Optimización Topológica 3D: SIMP con OC y MMA (Fase 3)
+## 4. Optimización Topológica 3D: SIMP con OC y MMA (Fase 3 Operativa)
+
+Implementada en `src/topo_logic/infrastructure/topopt/` (`filters.py`, `oc_optimizer.py`, `mma_optimizer.py`, `stress_aggregation.py`, `reconstruction.py`, `simp_engine.py`) y orquestada por `RunTopOptUseCase`:
 
 ### 4.1. Interpolación SIMP Modificada
 $$

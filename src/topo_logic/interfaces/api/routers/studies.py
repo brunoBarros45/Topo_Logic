@@ -6,15 +6,21 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, Response, status
 
-from topo_logic.application.use_cases import RunStaticFemUseCase
+from topo_logic.application.use_cases import RunStaticFemUseCase, RunTopOptUseCase
 from topo_logic.domain.exceptions import ResourceNotFoundError
 from topo_logic.domain.units import UnitSystem
 from topo_logic.infrastructure.fem import extract_binary_field
-from topo_logic.interfaces.api.dependencies import get_run_static_fem_use_case
+from topo_logic.infrastructure.topopt import extract_binary_densities
+from topo_logic.interfaces.api.dependencies import (
+    get_run_static_fem_use_case,
+    get_run_topopt_use_case,
+)
 from topo_logic.interfaces.api.schemas import (
     FemResultSummaryResponse,
     FemStudyCreateRequest,
     JobResponse,
+    TopOptResultSummaryResponse,
+    TopOptStudyCreateRequest,
 )
 
 router = APIRouter(prefix="/api/v1", tags=["studies"])
@@ -79,6 +85,65 @@ def download_fem_field(
             details={"job_id": job_id, "load_case_id": load_case_id, "field": field},
         ) from exc
 
+    return Response(
+        content=raw_bytes,
+        media_type="application/octet-stream",
+        headers=headers,
+    )
+
+
+@router.post(
+    "/projects/{project_id}/studies/topopt",
+    response_model=JobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def submit_topopt_study(
+    project_id: str,
+    body: TopOptStudyCreateRequest,
+    run_topopt_uc: RunTopOptUseCase = Depends(get_run_topopt_use_case),  # noqa: B008
+) -> JobResponse:
+    """Submit an asynchronous 3D SIMP Topology Optimization study (OC or MMA)."""
+    study = body.to_domain()
+    job = run_topopt_uc.submit(
+        project_id=project_id,
+        mesh_id=body.mesh_id,
+        study=study,
+    )
+    return JobResponse.from_domain(job)
+
+
+@router.get("/jobs/{job_id}/topopt-summary", response_model=TopOptResultSummaryResponse)
+def get_topopt_summary(
+    job_id: str,
+    run_topopt_uc: RunTopOptUseCase = Depends(get_run_topopt_use_case),  # noqa: B008
+) -> TopOptResultSummaryResponse:
+    """Retrieve final compliance, volume fraction, and mass savings summary."""
+    summary = run_topopt_uc.get_topopt_summary(job_id)
+    return TopOptResultSummaryResponse.from_domain(summary)
+
+
+@router.get("/jobs/{job_id}/reconstructed-stl")
+def download_reconstructed_stl(
+    job_id: str,
+    run_topopt_uc: RunTopOptUseCase = Depends(get_run_topopt_use_case),  # noqa: B008
+) -> Response:
+    """Download the reconstructed watertight Taubin-smoothed STL mesh."""
+    stl_bytes = run_topopt_uc.read_reconstructed_stl(job_id)
+    return Response(
+        content=stl_bytes,
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="topopt_{job_id}.stl"'},
+    )
+
+
+@router.get("/jobs/{job_id}/densities")
+def download_topopt_densities(
+    job_id: str,
+    run_topopt_uc: RunTopOptUseCase = Depends(get_run_topopt_use_case),  # noqa: B008
+) -> Response:
+    """Download packed little-endian Float32 physical element densities."""
+    _summary, density_payload = run_topopt_uc.read_density_payload(job_id)
+    raw_bytes, headers = extract_binary_densities(density_payload)
     return Response(
         content=raw_bytes,
         media_type="application/octet-stream",

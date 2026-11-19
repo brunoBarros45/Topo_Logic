@@ -253,3 +253,106 @@ def test_end_to_end_stl_mesh_fem_and_binary_fields_flow(app_client: TestClient) 
     assert disp_resp.headers["X-Topo-Shape"] == f"{mesh['node_count']},3"
     disp_arr = np.frombuffer(disp_resp.content, dtype="<f4").reshape(-1, 3)
     assert disp_arr.shape == (mesh["node_count"], 3)
+
+
+@pytest.mark.integration
+def test_end_to_end_stl_mesh_topopt_reconstructed_stl_and_densities_flow(
+    app_client: TestClient,
+) -> None:
+    proj_id = app_client.post("/api/v1/projects", json={"name": "TopOpt Bracket"}).json()["id"]
+
+    beam = trimesh.creation.box(extents=(50.0, 20.0, 20.0))
+    beam.apply_translation((25.0, 10.0, 10.0))
+    beam_raw = beam.export(file_type="stl")
+    beam_bytes = beam_raw if isinstance(beam_raw, bytes) else bytes(beam_raw)
+
+    geom_id = app_client.post(
+        f"/api/v1/projects/{proj_id}/geometries/upload",
+        files={"file": ("bracket.stl", beam_bytes, "application/octet-stream")},
+        data={"unit_system": "mm_N_MPa", "axis_convention": "Z_up", "auto_repair": "true"},
+    ).json()["id"]
+
+    mesh = app_client.post(
+        f"/api/v1/projects/{proj_id}/meshes",
+        json={"geometry_id": geom_id, "element_type": "H8", "target_element_size": 5.0},
+    ).json()
+    mesh_id = mesh["id"]
+    assert mesh["element_count"] == 160  # 10 x 4 x 4
+
+    topopt_req = {
+        "geometry_id": geom_id,
+        "mesh_id": mesh_id,
+        "unit_system": "mm_N_MPa",
+        "material": {"preset_id": "aluminum_6061_t6"},
+        "regions": [
+            {
+                "id": "r-root",
+                "name": "Root Clamp",
+                "selector": {
+                    "kind": "plane",
+                    "point": [0.0, 0.0, 0.0],
+                    "normal": [1.0, 0.0, 0.0],
+                    "tolerance": 1e-4,
+                },
+            },
+            {
+                "id": "r-tip",
+                "name": "Tip Pad",
+                "selector": {
+                    "kind": "bounding_box",
+                    "min_corner": [49.9, 5.0, 0.0],
+                    "max_corner": [50.1, 15.0, 5.0],
+                },
+            },
+        ],
+        "supports": [{"region_id": "r-root", "support_type": "fixed"}],
+        "load_cases": [
+            {
+                "id": "lc-1",
+                "name": "Tip Down",
+                "loads": [
+                    {"kind": "force", "region_id": "r-tip", "force_vector": [0.0, 0.0, -400.0]}
+                ],
+            }
+        ],
+        "element_type": "H8",
+        "solver_kind": "direct",
+        "target_volume_fraction": 0.40,
+        "optimizer_kind": "oc",
+        "max_iterations": 18,
+        "use_continuation": True,
+    }
+    submit_resp = app_client.post(f"/api/v1/projects/{proj_id}/studies/topopt", json=topopt_req)
+    assert submit_resp.status_code == 202
+    job_id = submit_resp.json()["id"]
+
+    deadline = time.monotonic() + 15.0
+    job_status = submit_resp.json()["status"]
+    while job_status not in {"completed", "failed", "cancelled"}:
+        assert time.monotonic() < deadline, "Timed out waiting for TopOpt job completion"
+        time.sleep(0.03)
+        job_status = app_client.get(f"/api/v1/jobs/{job_id}").json()["status"]
+
+    assert job_status == "completed"
+
+    summary_resp = app_client.get(f"/api/v1/jobs/{job_id}/topopt-summary")
+    assert summary_resp.status_code == 200
+    summary = summary_resp.json()
+    assert summary["final_volume_fraction"] == pytest.approx(0.40, abs=0.03)
+    assert summary["weight_savings"] is not None
+    assert summary["weight_savings"]["mass_reduction_percent"] == pytest.approx(60.0, abs=3.0)
+    assert summary["weight_savings"]["mass_saved_g"] > 0.0
+
+    stl_resp = app_client.get(f"/api/v1/jobs/{job_id}/reconstructed-stl")
+    assert stl_resp.status_code == 200
+    reconstructed = trimesh.load(io.BytesIO(stl_resp.content), file_type="stl", force="mesh")
+    assert isinstance(reconstructed, trimesh.Trimesh)
+    assert reconstructed.is_watertight
+    assert reconstructed.volume > 0.0
+
+    dens_resp = app_client.get(f"/api/v1/jobs/{job_id}/densities")
+    assert dens_resp.status_code == 200
+    assert dens_resp.headers["X-Topo-Dtype"] == "float32"
+    assert dens_resp.headers["X-Topo-Voxel-Shape"] == "10,4,4"
+    dens_arr = np.frombuffer(dens_resp.content, dtype="<f4")
+    assert len(dens_arr) == mesh["element_count"]

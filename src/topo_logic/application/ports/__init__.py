@@ -27,6 +27,7 @@ from topo_logic.application.ports.simulation import (
     FemSolverPort,
     LinearSystemSolverPort,
     OptimizerPort,
+    ReconstructedSurface,
     SurfaceReconstructorPort,
 )
 
@@ -47,6 +48,7 @@ __all__ = [
     "OptimizerPort",
     "ProjectRepositoryPort",
     "RawSurfacePayload",
+    "ReconstructedSurface",
     "RepairedMeshResult",
     "SurfaceReconstructorPort",
     "VolumetricMesherPort",
