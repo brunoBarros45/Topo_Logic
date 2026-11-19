@@ -10,6 +10,8 @@ from topo_logic.domain.boundary import (
     BoundaryRegion,
     BoundingBoxSelector,
     CadFaceTagSelector,
+    DesignZone,
+    DesignZoneType,
     ForceLoad,
     LoadCase,
     LoadDefinition,
@@ -28,8 +30,17 @@ from topo_logic.domain.results import (
     FemResultSummary,
     FieldStats,
     LoadCaseFemSummary,
+    TopOptResultSummary,
+    WeightSavingsMetrics,
 )
-from topo_logic.domain.study import FemStudyConfig, SolverKind
+from topo_logic.domain.study import (
+    FemStudyConfig,
+    FilterKind,
+    OptimizerKind,
+    SolverKind,
+    StressConstraintConfig,
+    TopOptStudyConfig,
+)
 from topo_logic.domain.units import UnitSystem
 
 
@@ -279,4 +290,126 @@ class FemResultSummaryResponse(BaseModel):
             load_case_results=[
                 LoadCaseFemSummaryResponse.from_domain(item) for item in summary.load_case_results
             ],
+        )
+
+
+class DesignZoneSchema(BaseModel):
+    region_id: str = Field(min_length=1)
+    zone_type: DesignZoneType
+
+    def to_domain(self) -> DesignZone:
+        return DesignZone(region_id=self.region_id, zone_type=self.zone_type)
+
+
+class StressConstraintSchema(BaseModel):
+    enabled: bool = False
+    max_von_mises: float | None = Field(default=None, gt=0.0)
+    p_norm_exponent: float = Field(default=8.0, ge=2.0)
+    use_adaptive_scaling: bool = True
+
+    def to_domain(self) -> StressConstraintConfig:
+        return StressConstraintConfig(
+            enabled=self.enabled,
+            max_von_mises=self.max_von_mises,
+            p_norm_exponent=self.p_norm_exponent,
+            use_adaptive_scaling=self.use_adaptive_scaling,
+        )
+
+
+class TopOptStudyCreateRequest(BaseModel):
+    """Request payload to submit a 3D SIMP Topology Optimization job."""
+
+    geometry_id: str = Field(min_length=1)
+    mesh_id: str = Field(min_length=1)
+    unit_system: UnitSystem = UnitSystem.MM_N_MPA
+    material: MaterialInputSchema
+    regions: list[BoundaryRegionSchema] = Field(min_length=1)
+    supports: list[SupportBCSchema] = Field(min_length=1)
+    load_cases: list[LoadCaseSchema] = Field(min_length=1)
+    element_type: ElementType = ElementType.H8
+    solver_kind: SolverKind = SolverKind.AUTO
+
+    target_volume_fraction: float = Field(ge=0.05, le=0.95)
+    penalty: float = Field(default=3.0, ge=1.0)
+    e_min_ratio: float = Field(default=1e-9, gt=0.0, lt=1e-3)
+    filter_kind: FilterKind = FilterKind.CONE_DENSITY
+    filter_radius_ratio: float = Field(default=1.5, ge=1.5)
+    optimizer_kind: OptimizerKind = OptimizerKind.OC
+    move_limit: float = Field(default=0.2, gt=0.0, le=0.5)
+    max_iterations: int = Field(default=80, ge=1)
+    convergence_tol: float = Field(default=0.01, gt=0.0)
+    use_continuation: bool = True
+    stress_constraint: StressConstraintSchema = Field(default_factory=StressConstraintSchema)
+    design_zones: list[DesignZoneSchema] = Field(default_factory=list)
+
+    def to_domain(self) -> TopOptStudyConfig:
+        fem_config = FemStudyConfig(
+            geometry_id=self.geometry_id,
+            material=self.material.to_domain(self.unit_system),
+            regions=tuple(r.to_domain() for r in self.regions),
+            supports=tuple(s.to_domain() for s in self.supports),
+            load_cases=tuple(lc.to_domain() for lc in self.load_cases),
+            element_type=self.element_type,
+            solver_kind=self.solver_kind,
+        )
+        return TopOptStudyConfig(
+            fem_config=fem_config,
+            target_volume_fraction=self.target_volume_fraction,
+            penalty=self.penalty,
+            e_min_ratio=self.e_min_ratio,
+            filter_kind=self.filter_kind,
+            filter_radius_ratio=self.filter_radius_ratio,
+            optimizer_kind=self.optimizer_kind,
+            move_limit=self.move_limit,
+            max_iterations=self.max_iterations,
+            convergence_tol=self.convergence_tol,
+            use_continuation=self.use_continuation,
+            stress_constraint=self.stress_constraint.to_domain(),
+            design_zones=tuple(z.to_domain() for z in self.design_zones),
+        )
+
+
+class WeightSavingsResponse(BaseModel):
+    original_mass_kg: float
+    optimized_mass_kg: float
+    mass_saved_kg: float
+    original_mass_g: float
+    optimized_mass_g: float
+    mass_saved_g: float
+    mass_reduction_percent: float
+
+    @classmethod
+    def from_domain(cls, metrics: WeightSavingsMetrics) -> WeightSavingsResponse:
+        return cls(
+            original_mass_kg=metrics.original_mass_kg,
+            optimized_mass_kg=metrics.optimized_mass_kg,
+            mass_saved_kg=metrics.mass_saved_kg,
+            original_mass_g=metrics.original_mass_g,
+            optimized_mass_g=metrics.optimized_mass_g,
+            mass_saved_g=metrics.mass_saved_g,
+            mass_reduction_percent=metrics.mass_reduction_percent,
+        )
+
+
+class TopOptResultSummaryResponse(BaseModel):
+    job_id: str
+    iterations_completed: int
+    converged: bool
+    final_compliance: float
+    final_volume_fraction: float
+    weight_savings: WeightSavingsResponse | None = None
+
+    @classmethod
+    def from_domain(cls, summary: TopOptResultSummary) -> TopOptResultSummaryResponse:
+        return cls(
+            job_id=summary.job_id,
+            iterations_completed=summary.iterations_completed,
+            converged=summary.converged,
+            final_compliance=summary.final_compliance,
+            final_volume_fraction=summary.final_volume_fraction,
+            weight_savings=(
+                WeightSavingsResponse.from_domain(summary.weight_savings)
+                if summary.weight_savings is not None
+                else None
+            ),
         )

@@ -45,18 +45,18 @@ This roadmap tracks the evolution of **`Topo_Logic`** from architectural foundat
 
 ---
 
-## Phase 3 — 3D Topology Optimization Engine (SIMP + OC & MMA + Stress) 📋 Planned
+## Phase 3 — 3D Topology Optimization Engine (SIMP + OC & MMA + Stress) ✅ Done
 - **Formulation & Filtering**:
-  - Modified SIMP interpolation ($E_{\min} = 10^{-9} E_0$), multi-loadcase weighted compliance objective, sparse cone density filter with exact adjoint chain-rule sensitivities, optional Heaviside projection, and penalty continuation.
+  - Modified SIMP interpolation ($E_{\min} = 10^{-9} E_0$), multi-loadcase weighted compliance objective, sparse `cKDTree` cone density filter with exact adjoint chain-rule sensitivities, optional Smoothed Heaviside projection, and penalty continuation.
   - Non-design passive solid and passive void domains (`DesignZone`).
 - **Optimizers & Stress Constraints**:
   - Optimality Criteria (**OC**) for fast single-volume-constraint compliance minimization.
-  - Method of Moving Asymptotes (**MMA**, adapted strictly from MIT-licensed `pyMOTO` with preserved attribution) supporting multiple constraints and **P-norm Von Mises stress aggregation** (`StressConstraintConfig`).
+  - Method of Moving Asymptotes (**MMA2007**, adapted strictly from MIT-licensed `pyMOTO` with preserved attribution) supporting multiple constraints and **P-norm Von Mises stress aggregation** (`StressConstraintConfig`) with adaptive scaling and exact adjoint sensitivities.
 - **Live Streaming & Watertight Reconstruction**:
-  - Real-time per-iteration WebSocket telemetry and density previews (`TopOptIterationEvent`).
-  - Zero-halo Marching Cubes isosurface extraction + volume-preserving Taubin smoothing + watertightness audit exporting `.STL` ready for manufacturing/CAD.
+  - Real-time per-iteration WebSocket telemetry (`topopt.iteration`) and packed little-endian `Float32` density binary downloads.
+  - 1-voxel zero-halo Marching Cubes (`scikit-image`) isosurface extraction + volume-preserving pure-SciPy Taubin smoothing + watertightness audit exporting `.STL` ready for manufacturing/CAD.
 - **Benchmarks**:
-  - 3D MBB beam and 3D cantilever benchmarks verifying monotonic convergence and exact target volume fraction.
+  - FD sensitivity verification for filters & P-norm stress adjoint, analytical KKT quadratic verification for MMA, 3D cantilever OC convergence + watertight `.STL`, MMA stress-constrained + `PASSIVE_SOLID`, and multi-loadcase mirror-symmetry bridge benchmarks.
 
 ---
 

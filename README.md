@@ -6,7 +6,7 @@
 
 **`Topo_Logic`** is an open-source (**MIT**) computational mechanics platform for **3D Finite Element Analysis (FEM)** and **3D Topology Optimization**, architected as a decoupled **Python core engine + FastAPI backend** serving multiple clients (a future Web 3D CAE Viewport, CLI workflows, and a planned **Autodesk Fusion 360 Add-In**).
 
-> **Current Status:** **Milestone 2 Complete (`v0.2.0a0`)** — 3D Linear Static FEM Engine (multi-loadcase `H8` + `C3D4`/`C3D10`, `splu` Direct & `pyamg` PCG solvers, Von Mises / safety factor / equilibrium checks, packed `Float32` binary fields, and analytical patch/cantilever benchmarks) implemented and passing. Phase 3 (3D Topology Optimization SIMP/OC/MMA) is next.
+> **Current Status:** **Milestone 3 Complete (`v0.3.0a0`)** — 3D Topology Optimization Engine (SIMP with `OC` & MIT `MMA`, sparse `cKDTree` cone filter + Heaviside projection, P-norm Von Mises stress constraint with exact adjoint sensitivities, passive solid/void `DesignZone`s, live `topopt.iteration` WebSocket streaming, `Float32` density streaming, and 1-voxel zero-halo Marching Cubes + Taubin watertight `.STL` reconstruction) implemented and passing. Phase 4 (Multi-Format CAD & Interactive Web Viewport) is next.
 
 ---
 
@@ -16,8 +16,8 @@
 | :--- | :--- | :--- | :--- |
 | **Phase 0** | Repository & Engineering Setup | **Done** | MIT license, `AGENTS.md`, engineering skills, read-only mechanics reference catalog |
 | **Phase 1** | **Architecture Foundation & `.STL` Vertical Slice** | **Done** | Hexagonal architecture, pure domain (multi-loadcase FEM + OC/MMA stress TopOpt + `WeightSavingsMetrics`), `.STL` diagnostics & Tier-1 repair, SQLite + LocalFS, FastAPI (`/api/v1/materials`, upload/download, WS) + CLI, Spanish `docs/` + ADRs |
-| **Phase 2** | **3D Linear Static FEM Engine** | **Done** | Pure-NumPy `H8` Z-column parity voxelizer & optional `Gmsh` CLI `C3D4`/`C3D10` adapter, consistent `Q4`/`T6`/`T3` traction integration, vectorized sparse assembly, Direct (`splu`) & `pyamg` PCG solvers, Von Mises / displacement / safety factor / equilibrium checks, `Float32` binary field endpoints, and analytical benchmarks (26 tests passing) |
-| **Phase 3** | **3D Topology Optimization (SIMP + OC/MMA)** | **Planned** | Cone/Heaviside filtering, multi-loadcase compliance (OC), P-norm stress constraints (MIT MMA), live WebSocket iteration streaming, watertight Marching Cubes + Taubin `.STL` export |
+| **Phase 2** | **3D Linear Static FEM Engine** | **Done** | Pure-NumPy `H8` Z-column parity voxelizer & optional `Gmsh` CLI `C3D4`/`C3D10` adapter, consistent `Q4`/`T6`/`T3` traction integration, vectorized sparse assembly, Direct (`splu`) & `pyamg` PCG solvers, Von Mises / displacement / safety factor / equilibrium checks, `Float32` binary field endpoints, and analytical benchmarks |
+| **Phase 3** | **3D Topology Optimization (SIMP + OC/MMA)** | **Done** | Sparse `cKDTree` cone & Heaviside projection filters, multi-loadcase compliance (`OC`), MIT `pyMOTO`-adapted `MMA` + relaxed P-norm Von Mises stress adjoints, passive solid/void `DesignZone`s, live `topopt.iteration` WS events, `Float32` density endpoint, zero-halo Marching Cubes + Taubin watertight `.STL` export, and FD/KKT/benchmark verification (35 tests passing) |
 | **Phase 4** | **Multi-Format CAD & Web Frontend** | **Planned** | `.OBJ`, `.PLY`, `.STEP` importers + interactive 3D Web Viewport (flood-fill face picking, colormaps, deformed ghost mesh, XYZ clipping) |
 | **Phase 5** | **Fusion 360 Add-In & Cloud Adapters** | **Planned** | Hybrid-API Python Fusion 360 Add-In (`CadFaceTagSelector`, local/remote server mode, live Palette, MeshBody re-import) + S3/Postgres/Redis Cloud adapters |
 
@@ -43,8 +43,8 @@ flowchart TB
     end
 
     subgraph Application["Application Layer"]
-        UC["Use Cases: ProjectService | IngestGeometryUseCase | GenerateMeshUseCase | RunStaticFemUseCase | JobService"]
-        PORTS["Protocol Ports: Importer | Repairer | Mesher | Solver | Optimizer | Storage | Repo | Queue | EventBus"]
+        UC["Use Cases: ProjectService | IngestGeometry | GenerateMesh | RunStaticFem | RunTopOpt | JobService"]
+        PORTS["Protocol Ports: Importer | Repairer | Mesher | Solver | Optimizer | Reconstructor | Storage | Repo | Queue | EventBus"]
     end
 
     subgraph Domain["Pure Domain Layer (Zero External Dependencies)"]
@@ -54,6 +54,7 @@ flowchart TB
     subgraph Infrastructure["Infrastructure Layer (Swappable Adapters)"]
         MESH["TrimeshStlImporter | TrimeshSurfaceRepairer | VoxelH8Mesher | GmshCliMesher"]
         FEM["StaticFemSolver (H8/C3D4/C3D10 | splu & pyamg PCG | Float32 Fields)"]
+        TOPOPT["SimpTopologyOptimizer (OC & MIT MMA | P-norm Stress) | WatertightStlReconstructor"]
         STORE["LocalFsArtifactStorage | SqliteRepositories (WAL)"]
         EXEC["InMemoryEventBus | LocalJobQueue"]
     end
@@ -63,7 +64,7 @@ flowchart TB
     API & CLICMD --> UC
     UC --> DOM
     UC -.-> PORTS
-    MESH & FEM & STORE & EXEC -.implements.-> PORTS
+    MESH & FEM & TOPOPT & STORE & EXEC -.implements.-> PORTS
 ```
 
 ---
@@ -75,9 +76,10 @@ flowchart TB
 - **Client-Agnostic Boundary Conditions & Multi-Loadcase Domain**:
   - `TriangleSetSelector` (Web viewport flood-fill), `PlaneSelector` & `BoundingBoxSelector` (CLI & analytical benchmarks), and `CadFaceTagSelector` (`.STEP` & Fusion 360 B-Rep faces).
   - Supports multiple weighted `LoadCase` definitions and non-design solid/void `DesignZone` tags.
-- **3D FEM & SIMP Topology Optimization Domain Contracts**:
+- **3D FEM & SIMP Topology Optimization Engine (`v0.2.0a0` & `v0.3.0a0` Operational)**:
   - Isotropic material library (`GET /api/v1/materials`: `Steel AISI 1020`, `Aluminum 6061-T6`, `Titanium Ti-6Al-4V`, `PLA`, `PETG`) with automatic unit conversion.
-  - Configured for both **Optimality Criteria (OC)** compliance minimization and **MMA + P-norm Von Mises stress-constrained** optimization, plus unit-consistent `WeightSavingsMetrics` (mass in `g`/`kg` and `%` reduction).
+  - 3D Linear Static FEM (`H8`, `C3D4`, `C3D10`) with Direct (`splu`) & `pyamg` PCG solvers, Von Mises / safety factor / equilibrium checks, and binary `Float32` fields.
+  - 3D SIMP Topology Optimization supporting **Optimality Criteria (OC)** compliance minimization and MIT-licensed **MMA + P-norm Von Mises stress-constrained** optimization, sparse `cKDTree` cone + Heaviside filtering, unit-consistent `WeightSavingsMetrics` (`g`, `kg`, `%`), live `topopt.iteration` WebSocket streaming, `Float32` density download, and watertight Marching Cubes + Taubin `.STL` reconstruction.
 
 ---
 

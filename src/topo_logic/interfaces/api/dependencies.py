@@ -13,6 +13,7 @@ from topo_logic.application.use_cases import (
     JobService,
     ProjectService,
     RunStaticFemUseCase,
+    RunTopOptUseCase,
 )
 from topo_logic.infrastructure.config import AppSettings
 from topo_logic.infrastructure.execution import InMemoryEventBus, LocalJobQueue
@@ -32,6 +33,10 @@ from topo_logic.infrastructure.storage import (
     SqliteMeshRepository,
     SqliteProjectRepository,
 )
+from topo_logic.infrastructure.topopt import (
+    SimpTopologyOptimizer,
+    WatertightStlReconstructor,
+)
 
 
 @dataclass(frozen=True)
@@ -47,6 +52,7 @@ class AppContainer:
     ingest_geometry: IngestGeometryUseCase
     generate_mesh: GenerateMeshUseCase
     run_static_fem: RunStaticFemUseCase
+    run_topopt: RunTopOptUseCase
     job_service: JobService
 
     def shutdown(self) -> None:
@@ -69,6 +75,8 @@ def build_container(settings: AppSettings) -> AppContainer:
     repairer = TrimeshSurfaceRepairer()
     mesher = CompositeVolumetricMesher([VoxelH8Mesher(), GmshCliMesher()])
     fem_solver = StaticFemSolver()
+    topopt_optimizer = SimpTopologyOptimizer()
+    surface_reconstructor = WatertightStlReconstructor()
     event_bus = InMemoryEventBus()
     job_queue = LocalJobQueue(max_workers=settings.max_workers)
 
@@ -102,6 +110,17 @@ def build_container(settings: AppSettings) -> AppContainer:
         job_queue=job_queue,
         fem_solver=fem_solver,
     )
+    run_topopt = RunTopOptUseCase(
+        project_repo=project_repo,
+        geometry_repo=geometry_repo,
+        mesh_repo=mesh_repo,
+        artifact_storage=storage,
+        job_service=job_service,
+        job_queue=job_queue,
+        event_publisher=event_bus,
+        optimizer=topopt_optimizer,
+        reconstructor=surface_reconstructor,
+    )
     return AppContainer(
         settings=settings,
         database=database,
@@ -112,6 +131,7 @@ def build_container(settings: AppSettings) -> AppContainer:
         ingest_geometry=ingest_geometry,
         generate_mesh=generate_mesh,
         run_static_fem=run_static_fem,
+        run_topopt=run_topopt,
         job_service=job_service,
     )
 
@@ -148,6 +168,10 @@ def get_generate_mesh_use_case(request: Request) -> GenerateMeshUseCase:
 
 def get_run_static_fem_use_case(request: Request) -> RunStaticFemUseCase:
     return get_container(request).run_static_fem
+
+
+def get_run_topopt_use_case(request: Request) -> RunTopOptUseCase:
+    return get_container(request).run_topopt
 
 
 def get_job_service(request: Request) -> JobService:
