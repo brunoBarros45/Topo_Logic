@@ -40,3 +40,20 @@
   - **FEM & Topology Optimization Engine**: `fem-topopt-engine` (and its `references/reference-codebase-catalog.md`), `topo2stl`, `hpc-calculix`, `hpc-fenics`, `hpc-paraview`.
   - **3D Web Viewport & R3F**: `threejs-fem-viewport`, `threejs-fundamentals`, `threejs-geometry`, `threejs-loaders`, `threejs-materials`, `threejs-shaders`, `threejs-interaction`, `threejs-performance`, `threejs-react-three-fiber`, plus `modern-web-guidance`.
   - **Parametric CAD Test Fixtures**: `freecad-scripts` (avoid copying noncommercial `parametric-3d-printing` files into repo source).
+
+---
+
+## 4. Git Workflow (`main` + `develop` + Conventional Commits)
+
+- **Permanent Branches**:
+  - `main`: Stable releases only. **NEVER commit or push directly to `main`**; updates arrive exclusively via GitHub Pull Request from `develop` (plus annotated SemVer release tag, e.g. `v0.2.0-alpha`).
+  - `develop`: Parallel active integration branch where all completed work converges.
+- **Topic / Feature Branches**:
+  - Always branch from up-to-date `develop` using prefixes: `feat/<name>`, `fix/<name>`, `docs/<name>`, `refactor/<name>`, `chore/<name>`, or `ci/<name>`.
+- **Atomic Conventional Commits**:
+  - Format: `<type>(<scope>): <imperative English summary>`.
+  - Allowed types: `feat`, `fix`, `docs`, `refactor`, `test`, `perf`, `build`, `ci`, `chore`.
+  - Standard scopes: `project`, `domain`, `application`, `mesh`, `fem`, `topopt`, `storage`, `api`, `cli`, `docs`, `ci`, `workflow`, `frontend`, `fusion360`.
+- **Milestone / Change Closure Cadence**:
+  - Run `ruff check src tests`, `mypy src/topo_logic`, and `pytest -v` before merging.
+  - Merge topic branch into `develop` with `--no-ff`, delete the temporary topic branch, and run `git push origin develop` after every milestone or major change.
