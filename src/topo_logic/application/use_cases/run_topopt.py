@@ -33,6 +33,7 @@ from topo_logic.domain.results import (
     WeightSavingsMetrics,
 )
 from topo_logic.domain.study import StudyType, TopOptStudyConfig
+from topo_logic.domain.units import UnitSystem
 
 
 class RunTopOptUseCase:
@@ -110,11 +111,16 @@ class RunTopOptUseCase:
             initial_message="Topology optimization job queued.",
         )
 
+        kg_factor = 1000.0 if study.fem_config.material.unit_system is UnitSystem.MM_N_MPA else 1.0
+        original_mass_kg = mesh.total_volume * study.fem_config.material.density * kg_factor
+
         def _worker(token: CancellationToken) -> None:
             self._run_worker(
                 job_id=job.id,
                 project_id=project_id,
+                mesh_id=mesh.id,
                 mesh_artifact_key=mesh.artifact_key,
+                original_mass_kg=original_mass_kg,
                 study=study,
                 token=token,
             )
@@ -149,12 +155,37 @@ class RunTopOptUseCase:
         summary = self.get_topopt_summary(job_id)
         return summary, self._storage.read_bytes(summary.density_field_key)
 
+    def read_mesh_and_densities(self, job_id: str) -> tuple[TopOptResultSummary, bytes, bytes]:
+        """Load summary, source H8 mesh payload, and packed densities for a completed TopOpt job."""
+        summary, density_payload = self.read_density_payload(job_id)
+        if summary.mesh_id is None:
+            raise DomainValidationError(
+                f"TopOpt job '{job_id}' does not have an associated volume mesh reference."
+            )
+        mesh = self._mesh_repo.get(summary.mesh_id)
+        if mesh is None:
+            raise ResourceNotFoundError(
+                f"Volume mesh '{summary.mesh_id}' for job '{job_id}' was not found.",
+                details={"job_id": job_id, "mesh_id": summary.mesh_id},
+            )
+        return summary, self._storage.read_bytes(mesh.artifact_key), density_payload
+
+    def get_topopt_history(self, job_id: str) -> list[TopOptIterationEvent]:
+        """Load per-iteration convergence telemetry for a completed TopOpt job."""
+        summary = self.get_topopt_summary(job_id)
+        if summary.history_artifact_key is None:
+            return []
+        raw = self._storage.read_bytes(summary.history_artifact_key)
+        return _deserialize_topopt_history(raw)
+
     def _run_worker(
         self,
         *,
         job_id: str,
         project_id: str,
+        mesh_id: str,
         mesh_artifact_key: str,
+        original_mass_kg: float,
         study: TopOptStudyConfig,
         token: CancellationToken,
     ) -> None:
@@ -170,14 +201,32 @@ class RunTopOptUseCase:
             )
 
             mesh_bytes = self._storage.read_bytes(mesh_artifact_key)
+            history_events: list[TopOptIterationEvent] = []
 
             def _on_iteration(ev: TopOptIterationEvent) -> None:
                 frac = min(1.0, float(ev.iteration) / float(study.max_iterations))
+                strain_energy = 0.5 * ev.compliance
+                remaining_mass_kg = original_mass_kg * ev.volume_fraction
+                enriched = TopOptIterationEvent(
+                    job_id=ev.job_id,
+                    iteration=ev.iteration,
+                    compliance=ev.compliance,
+                    volume_fraction=ev.volume_fraction,
+                    max_density_change=ev.max_density_change,
+                    max_von_mises=ev.max_von_mises,
+                    preview_artifact_key=ev.preview_artifact_key,
+                    strain_energy=strain_energy,
+                    remaining_mass_kg=remaining_mass_kg,
+                )
+                history_events.append(enriched)
+
                 payload: dict[str, object] = {
                     "iteration": ev.iteration,
                     "compliance": ev.compliance,
                     "volume_fraction": ev.volume_fraction,
                     "max_density_change": ev.max_density_change,
+                    "strain_energy": strain_energy,
+                    "remaining_mass_kg": remaining_mass_kg,
                 }
                 if ev.max_von_mises is not None:
                     payload["max_von_mises"] = ev.max_von_mises
@@ -221,6 +270,11 @@ class RunTopOptUseCase:
             stl_key = f"projects/{project_id}/jobs/{job_id}/reconstructed.stl"
             stored_stl_key = self._storage.save_bytes(stl_key, reconstructed.stl_bytes)
 
+            history_key = f"projects/{project_id}/jobs/{job_id}/topopt_history.json"
+            stored_history_key = self._storage.save_bytes(
+                history_key, _serialize_topopt_history(history_events)
+            )
+
             summary = TopOptResultSummary(
                 job_id=raw_summary.job_id,
                 iterations_completed=raw_summary.iterations_completed,
@@ -230,6 +284,8 @@ class RunTopOptUseCase:
                 reconstructed_stl_key=stored_stl_key,
                 density_field_key=stored_densities_key,
                 weight_savings=raw_summary.weight_savings,
+                mesh_id=mesh_id,
+                history_artifact_key=stored_history_key,
             )
             summary_key = f"projects/{project_id}/jobs/{job_id}/topopt_summary.json"
             stored_summary_key = self._storage.save_bytes(
@@ -287,6 +343,8 @@ def _serialize_topopt_summary(summary: TopOptResultSummary) -> bytes:
         "reconstructed_stl_key": summary.reconstructed_stl_key,
         "density_field_key": summary.density_field_key,
         "weight_savings": ws_payload,
+        "mesh_id": summary.mesh_id,
+        "history_artifact_key": summary.history_artifact_key,
     }
     return json.dumps(payload).encode("utf-8")
 
@@ -305,6 +363,8 @@ def _deserialize_topopt_summary(raw: bytes) -> TopOptResultSummary:
             mass_saved_g=float(ws_raw["mass_saved_g"]),
             mass_reduction_percent=float(ws_raw["mass_reduction_percent"]),
         )
+    mesh_id_raw = data.get("mesh_id")
+    history_raw = data.get("history_artifact_key")
     return TopOptResultSummary(
         job_id=str(data["job_id"]),
         iterations_completed=int(data["iterations_completed"]),
@@ -314,4 +374,45 @@ def _deserialize_topopt_summary(raw: bytes) -> TopOptResultSummary:
         reconstructed_stl_key=str(data["reconstructed_stl_key"]),
         density_field_key=str(data["density_field_key"]),
         weight_savings=ws,
+        mesh_id=str(mesh_id_raw) if mesh_id_raw is not None else None,
+        history_artifact_key=str(history_raw) if history_raw is not None else None,
     )
+
+
+def _serialize_topopt_history(events: list[TopOptIterationEvent]) -> bytes:
+    items = [
+        {
+            "job_id": ev.job_id,
+            "iteration": ev.iteration,
+            "compliance": ev.compliance,
+            "volume_fraction": ev.volume_fraction,
+            "max_density_change": ev.max_density_change,
+            "max_von_mises": ev.max_von_mises,
+            "strain_energy": ev.strain_energy,
+            "remaining_mass_kg": ev.remaining_mass_kg,
+        }
+        for ev in events
+    ]
+    return json.dumps(items).encode("utf-8")
+
+
+def _deserialize_topopt_history(raw: bytes) -> list[TopOptIterationEvent]:
+    items: list[dict[str, Any]] = json.loads(raw.decode("utf-8"))
+    events: list[TopOptIterationEvent] = []
+    for item in items:
+        max_vm = item.get("max_von_mises")
+        strain = item.get("strain_energy")
+        mass_kg = item.get("remaining_mass_kg")
+        events.append(
+            TopOptIterationEvent(
+                job_id=str(item["job_id"]),
+                iteration=int(item["iteration"]),
+                compliance=float(item["compliance"]),
+                volume_fraction=float(item["volume_fraction"]),
+                max_density_change=float(item["max_density_change"]),
+                max_von_mises=float(max_vm) if max_vm is not None else None,
+                strain_energy=float(strain) if strain is not None else None,
+                remaining_mass_kg=float(mass_kg) if mass_kg is not None else None,
+            )
+        )
+    return events

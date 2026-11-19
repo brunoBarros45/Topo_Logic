@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Response, status
 
 from topo_logic.application.use_cases import GenerateMeshUseCase
+from topo_logic.infrastructure.exporters import (
+    export_mesh_surface_vtp,
+    export_volume_surface_to_glb,
+)
 from topo_logic.infrastructure.mesh import deserialize_volume_mesh, extract_surface_arrays
 from topo_logic.interfaces.api.dependencies import get_generate_mesh_use_case
 from topo_logic.interfaces.api.schemas import (
@@ -73,4 +77,36 @@ def get_mesh_surface(
         surface_triangle_count=len(tris_i32),
         nodes=nodes_f32.tolist(),
         surface_triangles=tris_i32.tolist(),
+    )
+
+
+@router.get("/meshes/{mesh_id}/surface.glb")
+def get_mesh_surface_glb(
+    mesh_id: str,
+    generate_mesh_uc: GenerateMeshUseCase = Depends(get_generate_mesh_use_case),  # noqa: B008
+) -> Response:
+    """Download exterior boundary surface as binary .glb preserving exact vertex indices."""
+    summary, raw_bytes = generate_mesh_uc.read_mesh_bytes(mesh_id)
+    mesh_data = deserialize_volume_mesh(raw_bytes)
+    glb_bytes = export_volume_surface_to_glb(mesh_data)
+    return Response(
+        content=glb_bytes,
+        media_type="model/gltf-binary",
+        headers={"Content-Disposition": f'inline; filename="mesh_{summary.id}_surface.glb"'},
+    )
+
+
+@router.get("/meshes/{mesh_id}/surface.vtp")
+def get_mesh_surface_vtp(
+    mesh_id: str,
+    generate_mesh_uc: GenerateMeshUseCase = Depends(get_generate_mesh_use_case),  # noqa: B008
+) -> Response:
+    """Download exterior boundary surface as compressed VTK PolyData (.vtp) for VTK.js."""
+    summary, raw_bytes = generate_mesh_uc.read_mesh_bytes(mesh_id)
+    mesh_data = deserialize_volume_mesh(raw_bytes)
+    vtp_bytes = export_mesh_surface_vtp(mesh_data)
+    return Response(
+        content=vtp_bytes,
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="mesh_{summary.id}_surface.vtp"'},
     )

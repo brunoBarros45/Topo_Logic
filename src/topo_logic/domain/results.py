@@ -50,6 +50,7 @@ class FemResultSummary:
     job_id: str
     load_case_results: tuple[LoadCaseFemSummary, ...]
     fields_artifact_key: str
+    mesh_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -63,6 +64,8 @@ class TopOptIterationEvent:
     max_density_change: float
     max_von_mises: float | None = None
     preview_artifact_key: str | None = None
+    strain_energy: float | None = None
+    remaining_mass_kg: float | None = None
 
 
 @dataclass(frozen=True)
@@ -153,3 +156,5 @@ class TopOptResultSummary:
     reconstructed_stl_key: str
     density_field_key: str
     weight_savings: WeightSavingsMetrics | None = None
+    mesh_id: str | None = None
+    history_artifact_key: str | None = None

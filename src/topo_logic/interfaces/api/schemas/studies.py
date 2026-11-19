@@ -30,6 +30,7 @@ from topo_logic.domain.results import (
     FemResultSummary,
     FieldStats,
     LoadCaseFemSummary,
+    TopOptIterationEvent,
     TopOptResultSummary,
     WeightSavingsMetrics,
 )
@@ -281,12 +282,14 @@ class LoadCaseFemSummaryResponse(BaseModel):
 
 class FemResultSummaryResponse(BaseModel):
     job_id: str
+    mesh_id: str | None = None
     load_case_results: list[LoadCaseFemSummaryResponse]
 
     @classmethod
     def from_domain(cls, summary: FemResultSummary) -> FemResultSummaryResponse:
         return cls(
             job_id=summary.job_id,
+            mesh_id=summary.mesh_id,
             load_case_results=[
                 LoadCaseFemSummaryResponse.from_domain(item) for item in summary.load_case_results
             ],
@@ -393,6 +396,7 @@ class WeightSavingsResponse(BaseModel):
 
 class TopOptResultSummaryResponse(BaseModel):
     job_id: str
+    mesh_id: str | None = None
     iterations_completed: int
     converged: bool
     final_compliance: float
@@ -403,6 +407,7 @@ class TopOptResultSummaryResponse(BaseModel):
     def from_domain(cls, summary: TopOptResultSummary) -> TopOptResultSummaryResponse:
         return cls(
             job_id=summary.job_id,
+            mesh_id=summary.mesh_id,
             iterations_completed=summary.iterations_completed,
             converged=summary.converged,
             final_compliance=summary.final_compliance,
@@ -413,3 +418,30 @@ class TopOptResultSummaryResponse(BaseModel):
                 else None
             ),
         )
+
+
+class TopOptIterationPointResponse(BaseModel):
+    iteration: int
+    compliance: float
+    volume_fraction: float
+    max_density_change: float
+    max_von_mises: float | None = None
+    strain_energy: float | None = None
+    remaining_mass_kg: float | None = None
+
+    @classmethod
+    def from_domain(cls, event: TopOptIterationEvent) -> TopOptIterationPointResponse:
+        return cls(
+            iteration=event.iteration,
+            compliance=event.compliance,
+            volume_fraction=event.volume_fraction,
+            max_density_change=event.max_density_change,
+            max_von_mises=event.max_von_mises,
+            strain_energy=event.strain_energy,
+            remaining_mass_kg=event.remaining_mass_kg,
+        )
+
+
+class TopOptHistoryResponse(BaseModel):
+    job_id: str
+    points: list[TopOptIterationPointResponse]

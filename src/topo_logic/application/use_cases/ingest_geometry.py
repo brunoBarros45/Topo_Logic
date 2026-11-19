@@ -136,6 +136,8 @@ class IngestGeometryUseCase:
 
     def _resolve_format(self, filename: str) -> GeometryFormat:
         suffix = Path(filename).suffix.lower().lstrip(".")
+        if suffix == "stp":
+            suffix = "step"
         supported = sorted(fmt.value for fmt in self._importer.supported_formats())
         if not suffix:
             raise UnsupportedFormatError(
